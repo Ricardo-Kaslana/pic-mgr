@@ -3,7 +3,7 @@ use crate::models::ScanProgress;
 use crate::AppState;
 
 #[tauri::command]
-pub async fn scan_workspace(state: State<'_, AppState>, id: i64) -> Result<ScanProgress, String> {
+pub fn scan_workspace(state: State<AppState>, id: i64) -> Result<ScanProgress, String> {
     // Step 1: Get workspace path (short lock)
     let ws_path = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
@@ -21,7 +21,7 @@ pub async fn scan_workspace(state: State<'_, AppState>, id: i64) -> Result<ScanP
     let image_records = crate::scanner::scan_directory_individually(id, &ws_path);
     let total = image_records.len() as i64;
 
-    // Step 3: Insert in batches (lock per batch, not per entire scan)
+    // Step 3: Insert in batches
     let batch_size = 50;
     let mut processed = 0i64;
 
@@ -31,7 +31,6 @@ pub async fn scan_workspace(state: State<'_, AppState>, id: i64) -> Result<ScanP
             crate::db::queries::insert_image(&conn, record).map_err(|e| e.to_string())?;
             processed += 1;
         }
-        // Lock drops at end of this block, allowing other operations
     }
 
     Ok(ScanProgress {
@@ -44,11 +43,11 @@ pub async fn scan_workspace(state: State<'_, AppState>, id: i64) -> Result<ScanP
 }
 
 #[tauri::command]
-pub async fn rescan_workspace(state: State<'_, AppState>, id: i64) -> Result<ScanProgress, String> {
+pub fn rescan_workspace(state: State<AppState>, id: i64) -> Result<ScanProgress, String> {
     {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
         conn.execute("DELETE FROM images WHERE workspace_id = ?1", rusqlite::params![id])
             .map_err(|e| e.to_string())?;
     }
-    scan_workspace(state, id).await
+    scan_workspace(state, id)
 }

@@ -1,6 +1,5 @@
 pub mod thumbnail;
 
-use walkdir::WalkDir;
 use sha2::{Sha256, Digest};
 use std::fs;
 use std::io::Read;
@@ -10,7 +9,6 @@ use crate::models::ImageRecord;
 
 const SUPPORTED_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif",
-    "cr2", "nef", "arw",
 ];
 
 fn is_image_file(path: &Path) -> bool {
@@ -20,15 +18,18 @@ fn is_image_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Streaming SHA-256 hash — reads file in 8KB chunks to avoid loading entire file into memory.
+/// Streaming SHA-256 hash — reads file in 8KB chunks.
 fn compute_file_hash(path: &Path) -> Option<String> {
     let file = fs::File::open(path).ok()?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 8192];
     let mut reader = std::io::BufReader::new(file);
     loop {
-        let n = reader.read(&mut buf).ok()?;
-        if n == 0 { break; }
+        let n = match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => return None,
+        };
         hasher.update(&buf[..n]);
     }
     Some(format!("{:x}", hasher.finalize()))
@@ -88,17 +89,34 @@ fn chrono_lite_now() -> String {
     chrono_lite(now.as_secs() as i64)
 }
 
-/// Image dimensions are read lazily when thumbnails are generated.
-/// Scanning only collects metadata from the filesystem to avoid crashes.
+/// Recursively collect image files using std::fs (no WalkDir dependency).
+fn collect_image_files(dir: &Path, results: &mut Vec<std::path::PathBuf>) {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        if path.is_dir() {
+            collect_image_files(&path, results);
+        } else if path.is_file() && is_image_file(&path) {
+            results.push(path);
+        }
+    }
+}
 
 pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> Vec<ImageRecord> {
-    WalkDir::new(workspace_path)
+    let mut image_files = Vec::new();
+    collect_image_files(workspace_path, &mut image_files);
+
+    image_files
         .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file() && is_image_file(e.path()))
-        .map(|entry| {
-            let path = entry.path();
-            let relative = path.strip_prefix(workspace_path).unwrap_or(path);
+        .map(|path| {
+            let relative = path.strip_prefix(workspace_path).unwrap_or(&path);
             let relative_str = relative.to_string_lossy().to_string();
             let file_name = path.file_name()
                 .and_then(|n| n.to_str())
@@ -107,13 +125,10 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
             let format = path.extension()
                 .and_then(|e| e.to_str())
                 .map(|e| e.to_lowercase());
-            let file_size = fs::metadata(path).ok().map(|m| m.len() as i64);
-            let file_hash = compute_file_hash(path);
-            let created_at = file_modified_at(path);
+            let file_size = fs::metadata(&path).ok().map(|m| m.len() as i64);
+            let file_hash = compute_file_hash(&path);
+            let created_at = file_modified_at(&path);
             let now = chrono_lite_now();
-
-            // Dimensions are populated later during thumbnail generation
-            let (width, height) = (None, None);
 
             ImageRecord {
                 id: 0,
@@ -122,8 +137,8 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
                 file_name,
                 file_size,
                 file_hash,
-                width,
-                height,
+                width: None,
+                height: None,
                 format,
                 thumbnail_path: None,
                 notes: None,
