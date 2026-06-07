@@ -1,11 +1,29 @@
 :root {
   --bg-primary: #0f0f14;
   --bg-secondary: #1a1a24;
+  --bg-tertiary: #24243a;
   --text-primary: #e8e8ed;
   --text-secondary: #9898b0;
+  --text-muted: #686880;
   --accent: #7c6ff7;
+  --accent-hover: #9588ff;
   --border: #2a2a3a;
+  --danger: #f75c6b;
+  --success: #4ade80;
+  --warning: #facc15;
   --radius: 8px;
+  --transition: 150ms ease;
+  --scrollbar-width: 6px;
+}
+
+[data-theme="light"] {
+  --bg-primary: #fafafa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f0f5;
+  --text-primary: #1a1a2e;
+  --text-secondary: #6b6b80;
+  --text-muted: #9b9bb0;
+  --border: #e0e0e8;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,4 +33,57 @@ html, body, #app {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: var(--scrollbar-width); height: var(--scrollbar-width); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition);
+}
+
+button.primary {
+  background: var(--accent);
+  color: white;
+}
+button.primary:hover { background: var(--accent-hover); }
+
+button.secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+button.secondary:hover { background: var(--border); }
+
+input, textarea, select {
+  font-family: inherit;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }

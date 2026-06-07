@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import AppLayout from './components/layout/AppLayout.vue'
 </script>
 
 <template>
-  <div id="app">
-    <h1>PicMgr</h1>
-  </div>
+  <AppLayout>
+    <router-view v-slot="{ Component }">
+      <transition name="fade" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </router-view>
+  </AppLayout>
 </template>
