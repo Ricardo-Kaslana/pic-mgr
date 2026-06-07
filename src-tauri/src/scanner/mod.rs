@@ -88,16 +88,8 @@ fn chrono_lite_now() -> String {
     chrono_lite(now.as_secs() as i64)
 }
 
-/// Safely read image dimensions, catching panics from unsupported formats.
-fn safe_image_dimensions(path: &Path) -> (Option<i32>, Option<i32>) {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        image::image_dimensions(path)
-    }));
-    match result {
-        Ok(Ok((w, h))) => (Some(w as i32), Some(h as i32)),
-        _ => (None, None),
-    }
-}
+/// Image dimensions are read lazily when thumbnails are generated.
+/// Scanning only collects metadata from the filesystem to avoid crashes.
 
 pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> Vec<ImageRecord> {
     WalkDir::new(workspace_path)
@@ -120,7 +112,8 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
             let created_at = file_modified_at(path);
             let now = chrono_lite_now();
 
-            let (width, height) = safe_image_dimensions(path);
+            // Dimensions are populated later during thumbnail generation
+            let (width, height) = (None, None);
 
             ImageRecord {
                 id: 0,
