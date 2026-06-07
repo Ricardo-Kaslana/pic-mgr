@@ -39,5 +39,14 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     }
   }
 
-  return { cache, loading, load, revoke }
+  // Revoke all cached URLs (e.g., when switching workspaces)
+  function clearAll() {
+    for (const url of cache.value.values()) {
+      URL.revokeObjectURL(url)
+    }
+    cache.value = new Map()
+    loading.value = new Set()
+  }
+
+  return { cache, loading, load, revoke, clearAll }
 })
