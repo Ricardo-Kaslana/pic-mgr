@@ -21,7 +21,7 @@ export const useImageStore = defineStore('images', () => {
     sort_dir: 'desc',
   })
 
-  async function fetchImages(workspaceId: number) {
+  async function fetchImages(workspaceId: number, append = false) {
     loading.value = true
     try {
       const result = await invoke<ImagePage>('get_images', {
@@ -30,7 +30,11 @@ export const useImageStore = defineStore('images', () => {
         page: page.value,
         pageSize: pageSize.value,
       })
-      images.value = result.images
+      if (append && page.value > 1) {
+        images.value = [...images.value, ...result.images]
+      } else {
+        images.value = result.images
+      }
       total.value = result.total
     } finally {
       loading.value = false

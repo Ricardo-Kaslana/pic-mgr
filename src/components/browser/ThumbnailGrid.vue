@@ -88,9 +88,9 @@ function onScroll(e: Event) {
 
   // Load more when near bottom
   if (el.scrollTop + el.clientHeight >= el.scrollHeight - 500) {
-    if (!imageStore.loading) {
+    if (!imageStore.loading && imageStore.images.length < imageStore.total) {
       imageStore.setPage(imageStore.page + 1)
-      imageStore.fetchImages(props.workspaceId)
+      imageStore.fetchImages(props.workspaceId, true)
     }
   }
 }
