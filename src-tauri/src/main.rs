@@ -22,6 +22,8 @@ fn main() {
             commands::workspace::create_workspace,
             commands::workspace::list_workspaces,
             commands::workspace::delete_workspace,
+            commands::scan::scan_workspace,
+            commands::scan::rescan_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
