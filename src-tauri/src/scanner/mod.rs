@@ -3,6 +3,7 @@ pub mod thumbnail;
 use walkdir::WalkDir;
 use sha2::{Sha256, Digest};
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 use crate::models::ImageRecord;
@@ -19,10 +20,17 @@ fn is_image_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Streaming SHA-256 hash — reads file in 8KB chunks to avoid loading entire file into memory.
 fn compute_file_hash(path: &Path) -> Option<String> {
-    let bytes = fs::read(path).ok()?;
+    let file = fs::File::open(path).ok()?;
     let mut hasher = Sha256::new();
-    hasher.update(&bytes);
+    let mut buf = [0u8; 8192];
+    let mut reader = std::io::BufReader::new(file);
+    loop {
+        let n = reader.read(&mut buf).ok()?;
+        if n == 0 { break; }
+        hasher.update(&buf[..n]);
+    }
     Some(format!("{:x}", hasher.finalize()))
 }
 
@@ -80,6 +88,17 @@ fn chrono_lite_now() -> String {
     chrono_lite(now.as_secs() as i64)
 }
 
+/// Safely read image dimensions, catching panics from unsupported formats.
+fn safe_image_dimensions(path: &Path) -> (Option<i32>, Option<i32>) {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        image::image_dimensions(path)
+    }));
+    match result {
+        Ok(Ok((w, h))) => (Some(w as i32), Some(h as i32)),
+        _ => (None, None),
+    }
+}
+
 pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> Vec<ImageRecord> {
     WalkDir::new(workspace_path)
         .into_iter()
@@ -101,9 +120,7 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
             let created_at = file_modified_at(path);
             let now = chrono_lite_now();
 
-            let (width, height) = image::image_dimensions(path)
-                .map(|(w, h)| (Some(w as i32), Some(h as i32)))
-                .unwrap_or((None, None));
+            let (width, height) = safe_image_dimensions(path);
 
             ImageRecord {
                 id: 0,

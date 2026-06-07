@@ -4,26 +4,34 @@ use crate::AppState;
 
 #[tauri::command]
 pub async fn scan_workspace(state: State<'_, AppState>, id: i64) -> Result<ScanProgress, String> {
-    let workspace = {
+    // Step 1: Get workspace path (short lock)
+    let ws_path = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
-        crate::db::queries::get_workspace(&conn, id)
+        let workspace = crate::db::queries::get_workspace(&conn, id)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| "Workspace not found".to_string())?
+            .ok_or_else(|| "Workspace not found".to_string())?;
+        std::path::PathBuf::from(&workspace.path)
     };
 
-    let ws_path = std::path::PathBuf::from(&workspace.path);
     if !ws_path.exists() {
-        return Err(format!("Path does not exist: {}", workspace.path));
+        return Err(format!("Path does not exist: {}", ws_path.display()));
     }
 
-    let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+    // Step 2: Scan directory WITHOUT holding DB lock
     let image_records = crate::scanner::scan_directory_individually(id, &ws_path);
     let total = image_records.len() as i64;
+
+    // Step 3: Insert in batches (lock per batch, not per entire scan)
+    let batch_size = 50;
     let mut processed = 0i64;
 
-    for record in &image_records {
-        crate::db::queries::insert_image(&conn, record).map_err(|e| e.to_string())?;
-        processed += 1;
+    for chunk in image_records.chunks(batch_size) {
+        let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+        for record in chunk {
+            crate::db::queries::insert_image(&conn, record).map_err(|e| e.to_string())?;
+            processed += 1;
+        }
+        // Lock drops at end of this block, allowing other operations
     }
 
     Ok(ScanProgress {
