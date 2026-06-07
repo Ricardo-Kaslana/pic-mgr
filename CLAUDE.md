@@ -8,13 +8,14 @@ Tauri 2 + Vue 3 + SQLite 本地图片管理器。所有元数据只写数据库�
 pic-mgr/
 ├── src/                          — Vue 前端
 │   ├── stores/                   — 6 个 Pinia stores
-│   ├── views/                    — 3 个页面
+│   ├── views/                    — 5 个页面
 │   ├── components/               — UI 组件
+│   ├── i18n/                     — vue-i18n 国际化 (zh-CN, en)
 │   ├── types/index.ts            — TypeScript 接口
 │   └── router/index.ts           — Vue Router
 ├── src-tauri/                    — Rust 后端
 │   └── src/
-│       ├── commands/             — 17 个 Tauri commands
+│       ├── commands/             — 20 个 Tauri commands
 │       ├── db/                   — SQLite schema + queries
 │       └── scanner/              — 文件扫描 + 缩略图
 ├── docs/                         — 设计文档
@@ -32,6 +33,7 @@ pic-mgr/
 |---|------|
 | 桌面框架 | Tauri 2 |
 | 前端 | Vue 3 + TypeScript + Pinia + Vue Router 4 |
+| 国际化 | vue-i18n (zh-CN, en) |
 | 构建 | Vite |
 | 数据库 | SQLite (rusqlite, WAL, FTS5) |
 | 图片处理 | image-rs (WebP 缩略图) |

@@ -5,7 +5,7 @@
 | Context | Path | Description |
 |---------|------|-------------|
 | Backend (Rust) | `src-tauri/CONTEXT.md` | Tauri commands, SQLite, scanner, thumbnail pipeline |
-| Frontend (Vue) | `src/CONTEXT.md` | Vue 3 + Pinia stores, components, routing |
+| Frontend (Vue) | `src/CONTEXT.md` | Vue 3 + Pinia stores, components, routing, i18n |
 
 ## System-wide ADRs
 

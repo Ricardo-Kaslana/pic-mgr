@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0] — 2026-06-07
+
+### Added
+
+- **Multi-size thumbnail presets**: S (120px) / M (200px) / L (320px) buttons in settings
+- **Workspace rescan button**: 🔄 button on workspace cards to re-scan for new images
+- **Right-click context menu**: Open in Explorer, copy file path, remove from workspace
+- **Export metadata**: Export workspace metadata to JSON or CSV with browser download
+- **Image deduplication**: SHA-256 based duplicate detection page (`/workspace/:id/dedup`)
+- **i18n support**: vue-i18n with Chinese (zh-CN) and English (en) translations
+- **Image preview**: Detail panel now shows actual thumbnail image instead of placeholder
+- **Backend commands**: `open_in_explorer`, `delete_image`, `find_duplicates`
+
+### Changed
+
+- Settings thumbnail size control changed from range slider to S/M/L preset buttons
+- `ImagePreview` component now displays real thumbnail via `useThumbnailStore`
+
 ## [0.1.0] — 2026-06-07
 
 ### Added

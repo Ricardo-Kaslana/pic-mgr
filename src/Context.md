@@ -9,7 +9,8 @@ Vue 3 + TypeScript 前端，通过 Pinia stores 调用 Tauri commands，管理 U
 ```
 main.ts              — 应用入口，注册 Pinia + Vue Router
 App.vue              — AppLayout 包裹 router-view
-router/index.ts      — 3 个路由: /, /workspace/:id, /settings
+router/index.ts      — 4 个路由: /, /workspace/:id, /workspace/:id/dedup, /settings
+i18n/                — vue-i18n 国际化 (zh-CN.ts, en.ts, index.ts)
 types/index.ts       — TypeScript 接口定义
 style.css            — 全局样式 + CSS 变量 (暗色/亮色主题)
 
@@ -24,6 +25,7 @@ stores/
 views/
   WorkspaceHome.vue  — 工作区列表页
   BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail)
+  DedupView.vue      — 重复图片检测页
   SettingsPage.vue   — 设置页
 
 components/
@@ -52,3 +54,6 @@ components/
 - **虚拟滚动** — 自适应网格布局，按行计算可见区域，动态加载缩略图
 - **分页追加** — `fetchImages(id, append=true)` 翻页时追加而非替换
 - **主题** — CSS 变量 + `[data-theme]` 属性切换
+- **i18n** — vue-i18n，语言切换同步到 localStorage
+- **右键菜单** — Teleport 到 body 的 context menu，支持打开/复制/移除
+- **导出** — JSON/CSV 格式导出，通过 Blob + URL.createObjectURL 下载
