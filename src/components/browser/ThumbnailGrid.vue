@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
 import { useImageStore } from '../../stores/images'
 import { useSelectionStore } from '../../stores/selection'
 import { useSettingsStore } from '../../stores/settings'
@@ -82,6 +82,21 @@ const visibleItems = computed<VisibleItem[]>(() => {
   return items
 })
 
+// Reactive thumb URL map — separate from store cache for Vue reactivity
+const thumbUrls = reactive<Map<number, string>>(new Map())
+
+// Load thumbnails for newly visible items
+watch(visibleItems, (items) => {
+  for (const vi of items) {
+    const id = vi.image.id
+    if (!thumbUrls.has(id) && !thumbStore.loading.has(id)) {
+      thumbStore.load(id).then(url => {
+        if (url) thumbUrls.set(id, url)
+      })
+    }
+  }
+}, { immediate: true })
+
 function onScroll(e: Event) {
   const el = e.target as HTMLElement
   scrollTop.value = el.scrollTop
@@ -101,15 +116,6 @@ function handleClick(image: ImageRecord, e: MouseEvent) {
 
 function handleDblClick(image: ImageRecord) {
   emit('selectDetail', image.id)
-}
-
-// Load thumbnail URL — cache in store, never revoke (blob URLs stay alive)
-async function getThumbUrl(imageId: number): Promise<string | null> {
-  // Check cache first
-  if (thumbStore.cache.has(imageId)) {
-    return thumbStore.cache.get(imageId)!
-  }
-  return await thumbStore.load(imageId)
 }
 
 onMounted(() => {
@@ -139,10 +145,9 @@ onMounted(() => {
       >
         <div class="thumb-img">
           <img
-            v-if="thumbStore.cache.get(vi.image.id)"
-            :src="thumbStore.cache.get(vi.image.id)"
+            v-if="thumbUrls.get(vi.image.id)"
+            :src="thumbUrls.get(vi.image.id)"
             :alt="vi.image.file_name"
-            loading="lazy"
           />
           <div v-else class="placeholder"><span>🖼️</span></div>
         </div>
