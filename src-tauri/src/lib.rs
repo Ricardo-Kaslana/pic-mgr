@@ -1,1 +1,4 @@
-// lib.rs — modules will be added as implementation progresses
+pub mod commands;
+pub mod db;
+pub mod models;
+pub mod scanner;
