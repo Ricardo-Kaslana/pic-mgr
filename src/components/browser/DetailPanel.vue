@@ -23,6 +23,7 @@ async function handleUpdated() {
     </div>
     <div class="panel-body">
       <ImagePreview
+        :image-id="imageStore.selectedDetail.id"
         :file-name="imageStore.selectedDetail.file_name"
         :thumbnail-path="imageStore.selectedDetail.thumbnail_path"
       />

@@ -1,17 +1,30 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useThumbnailStore } from '../../stores/thumbnail'
 
-const props = defineProps<{ fileName: string; thumbnailPath: string | null }>()
+const props = defineProps<{
+  imageId: number
+  fileName: string
+  thumbnailPath: string | null
+}>()
 
-const displayName = computed(() => props.fileName)
+const thumbStore = useThumbnailStore()
+
+const thumbUrl = computed(() => thumbStore.cache.get(props.imageId) || null)
 </script>
 
 <template>
   <div class="image-preview">
-    <div class="preview-placeholder">
+    <img
+      v-if="thumbUrl"
+      :src="thumbUrl"
+      :alt="fileName"
+      class="preview-img"
+    />
+    <div v-else class="preview-placeholder">
       <span class="icon">🖼️</span>
-      <p>{{ displayName }}</p>
-      <p class="hint">双击缩略图查看大图</p>
+      <p>{{ fileName }}</p>
+      <p class="hint">暂无预览</p>
     </div>
   </div>
 </template>
@@ -21,8 +34,15 @@ const displayName = computed(() => props.fileName)
   background: var(--bg-primary);
   border-radius: var(--radius);
   min-height: 200px;
+  max-height: 400px;
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 16px;
+  overflow: hidden;
+}
+.preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 .preview-placeholder { text-align: center; color: var(--text-muted); }
 .icon { font-size: 48px; display: block; margin-bottom: 8px; }

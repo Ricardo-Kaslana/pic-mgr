@@ -27,6 +27,10 @@ async function handleDelete(id: number) {
     await store.remove(id)
   }
 }
+
+async function handleRescan(id: number) {
+  await store.scan(id)
+}
 </script>
 
 <template>
@@ -48,6 +52,7 @@ async function handleDelete(id: number) {
         :workspace="ws"
         @select="handleSelect"
         @delete="handleDelete"
+        @rescan="handleRescan"
       />
     </div>
 

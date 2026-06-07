@@ -15,6 +15,12 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/workspace/:id/dedup',
+      name: 'dedup',
+      component: () => import('../views/DedupView.vue'),
+      props: true,
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsPage.vue'),

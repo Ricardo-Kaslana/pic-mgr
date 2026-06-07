@@ -2,7 +2,11 @@
 import type { Workspace } from '../../types'
 
 const props = defineProps<{ workspace: Workspace }>()
-const emit = defineEmits<{ select: [id: number]; delete: [id: number] }>()
+const emit = defineEmits<{
+  select: [id: number]
+  delete: [id: number]
+  rescan: [id: number]
+}>()
 </script>
 
 <template>
@@ -14,7 +18,12 @@ const emit = defineEmits<{ select: [id: number]; delete: [id: number] }>()
       <p class="date">更新于 {{ workspace.updated_at }}</p>
     </div>
     <button
-      class="delete-btn"
+      class="action-btn rescan-btn"
+      @click.stop="emit('rescan', workspace.id)"
+      title="重新扫描"
+    >🔄</button>
+    <button
+      class="action-btn delete-btn"
       @click.stop="emit('delete', workspace.id)"
       title="删除工作区（不删文件）"
     >×</button>
@@ -40,12 +49,17 @@ const emit = defineEmits<{ select: [id: number]; delete: [id: number] }>()
 .card-body h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .path { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
 .date { font-size: 11px; color: var(--text-muted); }
-.delete-btn {
+.action-btn {
   background: none;
   color: var(--text-muted);
-  font-size: 20px;
+  font-size: 16px;
   padding: 4px 8px;
   border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
+.card:hover .action-btn { opacity: 1; }
+.rescan-btn:hover { background: var(--accent-bg); }
+.delete-btn { font-size: 20px; }
 .delete-btn:hover { background: var(--danger); color: white; }
 </style>
