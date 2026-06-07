@@ -29,7 +29,17 @@ pub fn get_thumbnail(
     drop(conn);
 
     let source_path = std::path::PathBuf::from(&workspace.path).join(&record.relative_path);
-    let thumb_path = cache.generate(&source_path, image_id)?;
+
+    // Catch panics from the image crate (e.g., unsupported formats, corrupt files)
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        cache.generate(&source_path, image_id)
+    }));
+
+    let thumb_path = match result {
+        Ok(Ok(path)) => path,
+        Ok(Err(e)) => return Err(e),
+        Err(_) => return Err(format!("Failed to process image: {}", source_path.display())),
+    };
 
     let conn2 = state.db.conn.lock().map_err(|e| e.to_string())?;
     crate::db::queries::update_thumbnail_path(&conn2, image_id, &thumb_path)
@@ -55,7 +65,16 @@ pub fn generate_thumbnail(
 
     let source_path = std::path::PathBuf::from(&workspace.path).join(&record.relative_path);
     let cache = thumb_state.cache.lock().map_err(|e| e.to_string())?;
-    let thumb_path = cache.generate(&source_path, image_id)?;
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        cache.generate(&source_path, image_id)
+    }));
+
+    let thumb_path = match result {
+        Ok(Ok(path)) => path,
+        Ok(Err(e)) => return Err(e),
+        Err(_) => return Err(format!("Failed to process image: {}", source_path.display())),
+    };
 
     let conn2 = state.db.conn.lock().map_err(|e| e.to_string())?;
     crate::db::queries::update_thumbnail_path(&conn2, image_id, &thumb_path)

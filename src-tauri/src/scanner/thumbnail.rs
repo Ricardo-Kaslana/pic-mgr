@@ -31,17 +31,15 @@ impl ThumbnailCache {
         };
 
         let thumbnail = img.thumbnail(new_w, new_h);
+        // Use actual dimensions from thumbnail (may differ slightly from requested)
+        let (actual_w, actual_h) = thumbnail.dimensions();
+        let rgba = thumbnail.to_rgba8();
         let cache_path = self.cache_path(image_id);
 
         let mut output = Vec::new();
         let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut output);
         encoder
-            .encode(
-                thumbnail.to_rgba8().as_raw(),
-                new_w,
-                new_h,
-                image::ColorType::Rgba8.into(),
-            )
+            .encode(rgba.as_raw(), actual_w, actual_h, image::ColorType::Rgba8.into())
             .map_err(|e| format!("Cannot encode WebP: {}", e))?;
 
         std::fs::write(&cache_path, &output)
