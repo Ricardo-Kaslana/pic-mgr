@@ -29,6 +29,7 @@
 - **Black screen on dedup click**: Caused by Vue Router treating `/workspace/:id/dedup` as nested child of `/workspace/:id` with no `<router-view>`. Fixed by embedding DedupView as component.
 - **Black screen on re-entering workspace**: Caused by Vue transition `mode="out-in"` getting stuck. Removed mode, added `imageStore.reset()` and `selection.clear()` on mount.
 - **Toast not visible**: `<style scoped>` cannot style Teleported elements. Changed to `:global()`.
+- **Thumbnail generation failed for mismatched extensions**: Files with wrong extensions (.jpg that are GIF, .png that are JPEG, .bmp that are PNG) failed because `image::open` used extension. Now uses `with_guessed_format()` to detect from magic bytes.
 - **Dedup crash on null fields**: `formatSize` now handles null/undefined `file_size`.
 - **Rust borrow lifetime**: `stmt.query_map()` result bound to local variable to avoid premature drop.
 - **find_duplicates panic protection**: Wrapped in `catch_unwind` to prevent app crash.
