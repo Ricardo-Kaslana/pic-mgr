@@ -17,6 +17,9 @@
 
 - Settings thumbnail size control changed from range slider to S/M/L preset buttons
 - `ImagePreview` component now displays real thumbnail via `useThumbnailStore`
+- **Click behavior redesign**: single click now opens detail panel (was: select); added explicit "☐ 选择" button to enter select mode with 全选/取消全选/完成 buttons
+- `ThumbnailGrid` accepts `selectMode` prop to branch click behavior
+- Escape key exits select mode first, then clears detail panel
 
 ## [0.1.0] — 2026-06-07
 

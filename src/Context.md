@@ -57,3 +57,4 @@ components/
 - **i18n** — vue-i18n，语言切换同步到 localStorage
 - **右键菜单** — Teleport 到 body 的 context menu，支持打开/复制/移除
 - **导出** — JSON/CSV 格式导出，通过 Blob + URL.createObjectURL 下载
+- **交互模式** — 单击查看图片详情；"选择"按钮进入选择模式（点击选中，全选/取消全选），Escape 退出
