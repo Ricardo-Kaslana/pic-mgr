@@ -19,6 +19,22 @@ const tagStore = useTagStore()
 
 const workspaceId = computed(() => Number(route.params.id))
 const showExportMenu = ref(false)
+const selectMode = ref(false)
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value
+  if (!selectMode.value) {
+    selection.clear()
+  }
+}
+
+function selectAll() {
+  selection.selectAll(imageStore.images.map(i => i.id))
+}
+
+function deselectAll() {
+  selection.clear()
+}
 
 onMounted(async () => {
   await workspaceStore.fetchAll()
@@ -53,13 +69,17 @@ function onKeyDown(e: KeyboardEvent) {
 
   switch (e.key) {
     case 'Escape':
-      selection.clear()
-      imageStore.selectedDetail = null
+      if (selectMode.value) {
+        selectMode.value = false
+        selection.clear()
+      } else {
+        imageStore.selectedDetail = null
+      }
       break
     case 'a':
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
-        selection.selectAll(imageStore.images.map(i => i.id))
+        if (selectMode.value) selectAll()
       }
       break
   }
@@ -76,21 +96,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       <div class="grid-header">
         <span class="image-count">{{ imageStore.total }} 张图片</span>
         <div class="header-actions">
-          <span v-if="selection.count > 0" class="selection-info">
-            已选 {{ selection.count }} 张
-          </span>
-          <button class="toolbar-btn" @click="router.push(`/workspace/${workspaceId}/dedup`)">🔍 查重</button>
-          <div class="export-dropdown">
-            <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出</button>
-            <div v-if="showExportMenu" class="export-menu">
-              <button @click="exportMetadata('json')">JSON 格式</button>
-              <button @click="exportMetadata('csv')">CSV 格式</button>
+          <template v-if="selectMode">
+            <span class="selection-info">已选 {{ selection.count }} 张</span>
+            <button class="toolbar-btn" @click="selectAll">全选</button>
+            <button class="toolbar-btn" @click="deselectAll">取消全选</button>
+            <button class="toolbar-btn active" @click="toggleSelectMode">✓ 完成</button>
+          </template>
+          <template v-else>
+            <button class="toolbar-btn" @click="toggleSelectMode">☐ 选择</button>
+            <button class="toolbar-btn" @click="router.push(`/workspace/${workspaceId}/dedup`)">🔍 查重</button>
+            <div class="export-dropdown">
+              <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出</button>
+              <div v-if="showExportMenu" class="export-menu">
+                <button @click="exportMetadata('json')">JSON 格式</button>
+                <button @click="exportMetadata('csv')">CSV 格式</button>
+              </div>
             </div>
-          </div>
+          </template>
         </div>
       </div>
       <ThumbnailGrid
         :workspace-id="workspaceId"
+        :select-mode="selectMode"
         @select-detail="(id: number) => imageStore.fetchDetail(id)"
       />
     </div>
@@ -128,6 +155,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   cursor: pointer;
 }
 .toolbar-btn:hover { border-color: var(--accent); }
+.toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .export-dropdown { position: relative; }
 .export-menu {
   position: absolute;

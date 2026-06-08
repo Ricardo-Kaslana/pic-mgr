@@ -6,8 +6,13 @@ import { useSettingsStore } from '../../stores/settings'
 import { useThumbnailStore } from '../../stores/thumbnail'
 import type { ImageRecord } from '../../types'
 
-const props = defineProps<{ workspaceId: number }>()
-const emit = defineEmits<{ selectDetail: [id: number] }>()
+const props = defineProps<{
+  workspaceId: number
+  selectMode: boolean
+}>()
+const emit = defineEmits<{
+  selectDetail: [id: number]
+}>()
 
 const imageStore = useImageStore()
 const selection = useSelectionStore()
@@ -111,11 +116,11 @@ function onScroll(e: Event) {
 }
 
 function handleClick(image: ImageRecord, e: MouseEvent) {
-  selection.toggle(image.id, e.shiftKey)
-}
-
-function handleDblClick(image: ImageRecord) {
-  emit('selectDetail', image.id)
+  if (props.selectMode) {
+    selection.toggle(image.id, e.shiftKey)
+  } else {
+    emit('selectDetail', image.id)
+  }
 }
 
 // Context menu
@@ -184,7 +189,6 @@ onMounted(() => {
         :style="vi.style"
         :class="{ selected: selection.selectedIds.has(vi.image.id) }"
         @click="handleClick(vi.image, $event)"
-        @dblclick="handleDblClick(vi.image)"
         @contextmenu.prevent="handleContextMenu(vi.image, $event)"
       >
         <div class="thumb-img">
