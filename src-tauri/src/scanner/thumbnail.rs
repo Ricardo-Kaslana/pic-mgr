@@ -39,18 +39,25 @@ impl ThumbnailCache {
             })
             .unwrap_or_else(|_| "cannot read".to_string());
 
-        let img = image::open(source_path).map_err(|e| {
-            let msg = format!(
-                "Cannot open image: {} | path={} ext={} size={}B magic=[{}]",
-                e,
-                source_path.display(),
-                ext,
-                file_size,
-                magic,
-            );
-            eprintln!("[thumbnail] {}", msg);
-            msg
-        })?;
+        // Use Reader with with_guessed_format() to detect format from file header
+        // instead of relying on extension
+        let img = image::io::Reader::open(source_path)
+            .map_err(|e| format!("Cannot open for reading: {}", e))?
+            .with_guessed_format()
+            .map_err(|e| format!("Cannot guess format: {}", e))?
+            .decode()
+            .map_err(|e| {
+                let msg = format!(
+                    "Cannot decode: {} | path={} ext={} size={}B magic=[{}]",
+                    e,
+                    source_path.display(),
+                    ext,
+                    file_size,
+                    magic,
+                );
+                eprintln!("[thumbnail] {}", msg);
+                msg
+            })?;
         let (w, h) = img.dimensions();
         let aspect = w as f64 / h as f64;
 
