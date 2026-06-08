@@ -41,10 +41,16 @@ function deselectAll() {
 }
 
 onMounted(async () => {
-  await workspaceStore.fetchAll()
-  workspaceStore.select(workspaceId.value)
-  await imageStore.fetchImages(workspaceId.value)
-  await tagStore.fetchTags(workspaceId.value)
+  try {
+    imageStore.reset()
+    selection.clear()
+    await workspaceStore.fetchAll()
+    workspaceStore.select(workspaceId.value)
+    await imageStore.fetchImages(workspaceId.value)
+    await tagStore.fetchTags(workspaceId.value)
+  } catch (e) {
+    console.error('[BrowserView] init failed:', e)
+  }
 })
 
 const toastMessage = ref('')

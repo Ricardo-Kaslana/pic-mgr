@@ -63,5 +63,12 @@ export const useImageStore = defineStore('images', () => {
 
   function setPage(p: number) { page.value = p }
 
-  return { images, total, page, pageSize, loading, selectedDetail, filters, fetchImages, fetchDetail, search, setPage }
+  function reset() {
+    images.value = []
+    total.value = 0
+    page.value = 1
+    selectedDetail.value = null
+  }
+
+  return { images, total, page, pageSize, loading, selectedDetail, filters, fetchImages, fetchDetail, search, setPage, reset }
 })
