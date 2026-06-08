@@ -9,7 +9,7 @@ Vue 3 + TypeScript 前端，通过 Pinia stores 调用 Tauri commands，管理 U
 ```
 main.ts              — 应用入口，注册 Pinia + Vue Router
 App.vue              — AppLayout 包裹 router-view
-router/index.ts      — 4 个路由: /, /workspace/:id, /workspace/:id/dedup, /settings
+router/index.ts      — 3 个路由: /, /workspace/:id, /settings
 i18n/                — vue-i18n 国际化 (zh-CN.ts, en.ts, index.ts)
 types/index.ts       — TypeScript 接口定义
 style.css            — 全局样式 + CSS 变量 (暗色/亮色主题)
@@ -24,8 +24,8 @@ stores/
 
 views/
   WorkspaceHome.vue  — 工作区列表页
-  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail)
-  DedupView.vue      — 重复图片检测页
+  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView)
+  DedupView.vue      — 重复图片检测 (作为 BrowserView 子组件)
   SettingsPage.vue   — 设置页
 
 components/
@@ -50,7 +50,8 @@ components/
 ## Key patterns
 
 - **Tauri invoke** — 所有后端调用通过 `invoke<ReturnType>('command_name', { params })`
-- **响应式缓存** — thumbnail store 用 `ref<Map>` 缓存 blob URL，grid 用 `reactive<Map>` 触发重渲染
+- **响应式缓存** — thumbnail store 用 LRU 缓存 (MAX 500)，grid 用 `reactive<Map>` 触发重渲染
+- **内存管理** — 滚动离开可视区后 revoke blob URL，LRU 淘汰最久未访问的缩略图
 - **虚拟滚动** — 自适应网格布局，按行计算可见区域，动态加载缩略图
 - **分页追加** — `fetchImages(id, append=true)` 翻页时追加而非替换
 - **主题** — CSS 变量 + `[data-theme]` 属性切换

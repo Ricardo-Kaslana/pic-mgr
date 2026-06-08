@@ -68,7 +68,10 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 - **扫描器** 不使用 image crate 读取尺寸（避免栈溢出），只做文件系统元数据 + SHA-256
 - **缩略图** 按需生成，包裹在 `catch_unwind` 中
 - **虚拟滚动** 自适应网格布局，`reactive<Map>` 触发缩略图重渲染
+- **LRU 缩略图缓存** 最多 500 个 blob URL，超出淘汰最久未访问的；滚动离开可视区自动 revoke
+- **缩略图格式检测** 使用 `with_guessed_format()` 从文件头魔数判断，不依赖扩展名
 - **分页** 追加模式（`append=true`），不替换已有数据
+- **DedupView** 内嵌为 BrowserView 子组件，非独立路由（避免 Vue Router 嵌套黑屏）
 
 ## 已知限制
 

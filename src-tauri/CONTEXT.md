@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tauri 2 桌面应用后端。通过 Tauri commands 暴露 17 个 API，负责文件系统访问、SQLite 读写和缩略图生成。
+Tauri 2 桌面应用后端。通过 Tauri commands 暴露 20 个 API，负责文件系统访问、SQLite 读写和缩略图生成。
 
 ## Architecture
 
@@ -19,11 +19,11 @@ scanner/
 commands/
   workspace.rs   — create_workspace, list_workspaces, delete_workspace
   scan.rs        — scan_workspace, rescan_workspace
-  images.rs      — get_images, get_image_detail, search_images
-  metadata.rs    — update_notes, update_rating, batch_update_tags
+  images.rs      — get_images, get_image_detail, search_images, find_duplicates
+  metadata.rs    — update_notes, update_rating, batch_update_tags, open_in_explorer, delete_image
   tags.rs        — get_tags, create_tag, delete_tag
   thumbnail.rs   — get_thumbnail, generate_thumbnail
-  export.rs      — export_metadata (JSON/CSV)
+  export.rs      — export_metadata (JSON/CSV, 支持 image_ids 筛选)
 ```
 
 ## Key decisions
@@ -32,7 +32,8 @@ commands/
 - **Database** 使用 `Mutex<Connection>` 保护并发访问
 - **ThumbnailState** 独立管理，包含 `Mutex<ThumbnailCache>`
 - **扫描器** 不使用 image crate 读取尺寸（避免栈缓冲区溢出），只做文件系统元数据 + SHA-256
-- **缩略图** 按需生成，使用 `catch_unwind` 保护 image crate 调用
+- **缩略图** 按需生成，使用 `catch_unwind` 保护，根据文件头魔数判断格式（非扩展名）
+- **Tauri 插件** — tauri-plugin-dialog (文件夹选择/保存对话框), tauri-plugin-fs (文件写入)
 - **批量插入** 每 50 条释放一次数据库锁
 
 ## Dependencies

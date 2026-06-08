@@ -24,6 +24,17 @@
 - Escape key exits select mode first, then clears detail panel
 - DedupView embedded as component inside BrowserView (not a separate route)
 
+### Optimized
+
+- **LRU thumbnail cache**: Max 500 blob URLs with access-order tracking, auto-evicts oldest
+- **Memory cleanup**: Blob URLs revoked when thumbnails scroll out of view (100-item buffer)
+- **Skeleton loading**: Shimmer animation shown while thumbnails load (replaces blank placeholder)
+- **Hover effects**: Cards lift with translateY + box-shadow + image scale on hover
+- **Selected state**: Box-shadow highlight for clearer visual feedback
+- **CSS variables**: Added --accent-bg, --radius-sm, --shadow-sm/md/lg for consistency
+- **Empty state**: Large icon + title + direct create button on workspace home
+- **ImageInfo**: Shows file path, null-safe dimensions display
+
 ### Fixed
 
 - **Black screen on dedup click**: Caused by Vue Router treating `/workspace/:id/dedup` as nested child of `/workspace/:id` with no `<router-view>`. Fixed by embedding DedupView as component.

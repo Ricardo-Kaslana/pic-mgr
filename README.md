@@ -46,11 +46,12 @@ npm run tauri build
 pic-mgr/
 ├── src/                    — Vue 前端
 │   ├── stores/             — 6 个 Pinia stores
-│   ├── views/              — 3 个页面
-│   └── components/         — UI 组件
+│   ├── views/              — 4 个页面
+│   ├── components/         — UI 组件
+│   └── i18n/               — vue-i18n 国际化
 ├── src-tauri/              — Rust 后端
 │   └── src/
-│       ├── commands/       — 17 个 Tauri commands
+│       ├── commands/       — 20 个 Tauri commands
 │       ├── db/             — SQLite schema + queries
 │       └── scanner/        — 文件扫描 + 缩略图
 ├── docs/                   — 设计文档 + ADR
