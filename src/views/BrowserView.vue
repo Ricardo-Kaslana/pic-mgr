@@ -129,7 +129,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           </template>
           <template v-else>
             <button class="toolbar-btn" @click="toggleSelectMode">☐ 选择</button>
-            <button class="toolbar-btn" @click="router.push(`/workspace/${workspaceId}/dedup`)">🔍 查重</button>
+            <button class="toolbar-btn" @click="router.push(`/dedup/${workspaceId}`)">🔍 查重</button>
             <div class="export-dropdown">
               <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出</button>
               <div v-if="showExportMenu" class="export-menu">

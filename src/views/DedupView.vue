@@ -44,6 +44,7 @@ async function removeImage(id: number) {
 function goBack() {
   router.push(`/workspace/${workspaceId.value}`)
 }
+
 </script>
 
 <template>

@@ -15,7 +15,7 @@ const router = createRouter({
       props: true,
     },
     {
-      path: '/workspace/:id/dedup',
+      path: '/dedup/:id',
       name: 'dedup',
       component: () => import('../views/DedupView.vue'),
       props: true,
