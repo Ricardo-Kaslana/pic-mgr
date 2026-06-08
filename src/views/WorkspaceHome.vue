@@ -41,8 +41,10 @@ async function handleRescan(id: number) {
     </header>
 
     <div v-if="store.workspaces.length === 0" class="empty">
-      <p>还没有工作区</p>
+      <div class="empty-icon">🖼️</div>
+      <p class="empty-title">还没有工作区</p>
       <p class="hint">将一个图片文件夹设为工作区，即可开始管理</p>
+      <button class="primary" @click="showDialog = true" style="margin-top: 16px;">+ 新建工作区</button>
     </div>
 
     <div class="grid">
@@ -69,6 +71,8 @@ async function handleRescan(id: number) {
 .home-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 .home-header h1 { font-size: 24px; font-weight: 700; }
 .empty { text-align: center; padding: 80px 0; color: var(--text-muted); }
-.empty .hint { font-size: 14px; margin-top: 8px; }
+.empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.6; }
+.empty-title { font-size: 18px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+.empty .hint { font-size: 14px; color: var(--text-muted); }
 .grid { display: flex; flex-direction: column; gap: 12px; }
 </style>

@@ -90,14 +90,27 @@ const visibleItems = computed<VisibleItem[]>(() => {
 // Reactive thumb URL map — separate from store cache for Vue reactivity
 const thumbUrls = reactive<Map<number, string>>(new Map())
 
-// Load thumbnails for newly visible items
+// Load thumbnails for newly visible items, revoke for items that scrolled out
 watch(visibleItems, (items) => {
+  const visibleIds = new Set(items.map(vi => vi.image.id))
+
+  // Load new visible items
   for (const vi of items) {
     const id = vi.image.id
     if (!thumbUrls.has(id) && !thumbStore.loading.has(id)) {
       thumbStore.load(id).then(url => {
         if (url) thumbUrls.set(id, url)
       })
+    }
+  }
+
+  // Revoke URLs for items that scrolled out of view (keep a buffer of 100)
+  if (thumbUrls.size > visibleIds.size + 100) {
+    for (const [id] of thumbUrls) {
+      if (!visibleIds.has(id)) {
+        thumbUrls.delete(id)
+        thumbStore.revoke(id)
+      }
     }
   }
 }, { immediate: true })
@@ -196,7 +209,9 @@ onMounted(() => {
             v-if="thumbUrls.get(vi.image.id)"
             :src="thumbUrls.get(vi.image.id)"
             :alt="vi.image.file_name"
+            loading="lazy"
           />
+          <div v-else-if="thumbStore.loading.has(vi.image.id)" class="skeleton"></div>
           <div v-else class="placeholder"><span>🖼️</span></div>
         </div>
         <div class="thumb-info">
@@ -240,17 +255,25 @@ onMounted(() => {
 
 .grid-cell {
   background: var(--bg-secondary);
-  border: 2px solid var(--border);
+  border: 2px solid transparent;
   border-radius: var(--radius);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color var(--transition);
+  transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   position: absolute;
 }
-.grid-cell:hover { border-color: var(--accent); }
-.grid-cell.selected { border-color: var(--accent); background: var(--bg-tertiary); }
+.grid-cell:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.grid-cell.selected {
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 
 .thumb-img {
   flex: 1;
@@ -265,10 +288,26 @@ onMounted(() => {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  transition: transform 0.2s ease;
+}
+.grid-cell:hover .thumb-img img {
+  transform: scale(1.02);
 }
 .placeholder {
   font-size: 32px;
   color: var(--text-muted);
+  opacity: 0.5;
+}
+.skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .thumb-info {
