@@ -2,11 +2,10 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
-import type { ImageRecord } from '../types'
 
 interface DuplicateGroup {
   hash: string
-  images: ImageRecord[]
+  images: any[]
 }
 
 const route = useRoute()
@@ -18,7 +17,8 @@ const error = ref('')
 
 onMounted(async () => {
   try {
-    groups.value = await invoke('find_duplicates', { workspaceId: workspaceId.value })
+    const result = await invoke<DuplicateGroup[]>('find_duplicates', { workspaceId: workspaceId.value })
+    groups.value = result || []
   } catch (e: any) {
     console.error('Failed to find duplicates:', e)
     error.value = String(e)
@@ -27,24 +27,29 @@ onMounted(async () => {
   }
 })
 
-function formatSize(bytes: number | null | undefined): string {
+function formatSize(bytes: any): string {
   if (bytes == null) return '—'
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / 1048576).toFixed(1) + ' MB'
+  const n = Number(bytes)
+  if (isNaN(n)) return '—'
+  if (n < 1024) return n + ' B'
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'
+  return (n / 1048576).toFixed(1) + ' MB'
 }
 
 async function removeImage(id: number) {
   if (confirm('从工作区移除此图片？不会删除原始文件。')) {
-    await invoke('delete_image', { id })
-    groups.value = await invoke('find_duplicates', { workspaceId: workspaceId.value })
+    try {
+      await invoke('delete_image', { id })
+      groups.value = await invoke('find_duplicates', { workspaceId: workspaceId.value }) || []
+    } catch (e) {
+      console.error('Failed to remove:', e)
+    }
   }
 }
 
 function goBack() {
   router.push(`/workspace/${workspaceId.value}`)
 }
-
 </script>
 
 <template>
@@ -55,28 +60,21 @@ function goBack() {
       <span class="count" v-if="!loading && !error">{{ groups.length }} 组重复</span>
     </header>
 
-    <div v-if="loading" class="loading">扫描中...</div>
-
-    <div v-else-if="error" class="error">
-      <p>⚠️ 加载失败</p>
-      <p class="error-detail">{{ error }}</p>
-    </div>
-
-    <div v-else-if="groups.length === 0" class="empty">
-      <p>🎉 没有发现重复图片</p>
-    </div>
+    <div v-if="loading" class="status-msg">扫描中...</div>
+    <div v-else-if="error" class="status-msg error">⚠️ {{ error }}</div>
+    <div v-else-if="groups.length === 0" class="status-msg">🎉 没有发现重复图片</div>
 
     <div v-else class="groups">
       <div v-for="group in groups" :key="group.hash" class="dup-group">
         <div class="group-header">
-          <span class="hash">SHA-256: {{ group.hash.substring(0, 16) }}...</span>
-          <span class="group-count">{{ group.images.length }} 个文件</span>
+          <span class="hash">SHA-256: {{ group.hash ? group.hash.substring(0, 16) : '?' }}...</span>
+          <span class="group-count">{{ group.images ? group.images.length : 0 }} 个文件</span>
         </div>
-        <div class="group-images">
+        <div class="group-images" v-if="group.images">
           <div v-for="img in group.images" :key="img.id" class="dup-item">
             <div class="item-info">
-              <p class="file-name">{{ img.file_name }}</p>
-              <p class="file-path">{{ img.relative_path }}</p>
+              <p class="file-name">{{ img.file_name || '—' }}</p>
+              <p class="file-path">{{ img.relative_path || '—' }}</p>
               <p class="file-meta">{{ formatSize(img.file_size) }} · {{ img.format || '—' }}</p>
             </div>
             <button class="remove-btn" @click="removeImage(img.id)">移除</button>
@@ -110,10 +108,8 @@ function goBack() {
 .back-btn:hover { border-color: var(--accent); }
 h1 { font-size: 20px; font-weight: 600; }
 .count { font-size: 13px; color: var(--text-muted); }
-.loading { text-align: center; padding: 60px 0; color: var(--text-muted); }
-.empty { text-align: center; padding: 60px 0; color: var(--text-muted); font-size: 16px; }
-.error { text-align: center; padding: 60px 0; color: var(--danger); }
-.error-detail { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.status-msg { text-align: center; padding: 60px 0; color: var(--text-muted); font-size: 16px; }
+.status-msg.error { color: var(--danger); }
 .groups { display: flex; flex-direction: column; gap: 20px; }
 .dup-group {
   background: var(--bg-secondary);
