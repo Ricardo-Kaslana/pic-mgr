@@ -20,7 +20,37 @@ impl ThumbnailCache {
     }
 
     pub fn generate(&self, source_path: &Path, image_id: i64) -> Result<String, String> {
-        let img = image::open(source_path).map_err(|e| format!("Cannot open image: {}", e))?;
+        // Log file info for debugging
+        let file_size = std::fs::metadata(source_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+        let ext = source_path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("none");
+
+        // Read first 16 bytes to check magic bytes
+        let magic = std::fs::read(source_path)
+            .map(|buf| {
+                if buf.len() >= 4 {
+                    format!("{:02X} {:02X} {:02X} {:02X}", buf[0], buf[1], buf[2], buf[3])
+                } else {
+                    "file too small".to_string()
+                }
+            })
+            .unwrap_or_else(|_| "cannot read".to_string());
+
+        let img = image::open(source_path).map_err(|e| {
+            let msg = format!(
+                "Cannot open image: {} | path={} ext={} size={}B magic=[{}]",
+                e,
+                source_path.display(),
+                ext,
+                file_size,
+                magic,
+            );
+            eprintln!("[thumbnail] {}", msg);
+            msg
+        })?;
         let (w, h) = img.dimensions();
         let aspect = w as f64 / h as f64;
 
