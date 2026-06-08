@@ -11,6 +11,7 @@ import { useTagStore } from '../stores/tags'
 import SidebarPanel from '../components/browser/SidebarPanel.vue'
 import ThumbnailGrid from '../components/browser/ThumbnailGrid.vue'
 import DetailPanel from '../components/browser/DetailPanel.vue'
+import DedupView from './DedupView.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +23,7 @@ const tagStore = useTagStore()
 const workspaceId = computed(() => Number(route.params.id))
 const showExportMenu = ref(false)
 const selectMode = ref(false)
+const showDedup = ref(false)
 
 function toggleSelectMode() {
   selectMode.value = !selectMode.value
@@ -109,44 +111,49 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 <template>
   <div class="browser">
-    <SidebarPanel :workspace-id="workspaceId" />
-    <div class="grid-area">
-      <div class="grid-header">
-        <span class="image-count">{{ imageStore.total }} 张图片</span>
-        <div class="header-actions">
-          <template v-if="selectMode">
-            <span class="selection-info">已选 {{ selection.count }} 张</span>
-            <button class="toolbar-btn" @click="selectAll">全选</button>
-            <button class="toolbar-btn" @click="deselectAll">取消全选</button>
-            <div class="export-dropdown">
-              <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出选中</button>
-              <div v-if="showExportMenu" class="export-menu">
-                <button @click="exportMetadata('json')">JSON 格式</button>
-                <button @click="exportMetadata('csv')">CSV 格式</button>
+    <template v-if="showDedup">
+      <DedupView :workspace-id="workspaceId" @close="showDedup = false" />
+    </template>
+    <template v-else>
+      <SidebarPanel :workspace-id="workspaceId" />
+      <div class="grid-area">
+        <div class="grid-header">
+          <span class="image-count">{{ imageStore.total }} 张图片</span>
+          <div class="header-actions">
+            <template v-if="selectMode">
+              <span class="selection-info">已选 {{ selection.count }} 张</span>
+              <button class="toolbar-btn" @click="selectAll">全选</button>
+              <button class="toolbar-btn" @click="deselectAll">取消全选</button>
+              <div class="export-dropdown">
+                <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出选中</button>
+                <div v-if="showExportMenu" class="export-menu">
+                  <button @click="exportMetadata('json')">JSON 格式</button>
+                  <button @click="exportMetadata('csv')">CSV 格式</button>
+                </div>
               </div>
-            </div>
-            <button class="toolbar-btn active" @click="toggleSelectMode">✓ 完成</button>
-          </template>
-          <template v-else>
-            <button class="toolbar-btn" @click="toggleSelectMode">☐ 选择</button>
-            <button class="toolbar-btn" @click="router.push(`/dedup/${workspaceId}`)">🔍 查重</button>
-            <div class="export-dropdown">
-              <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出</button>
-              <div v-if="showExportMenu" class="export-menu">
-                <button @click="exportMetadata('json')">JSON 格式</button>
-                <button @click="exportMetadata('csv')">CSV 格式</button>
+              <button class="toolbar-btn active" @click="toggleSelectMode">✓ 完成</button>
+            </template>
+            <template v-else>
+              <button class="toolbar-btn" @click="toggleSelectMode">☐ 选择</button>
+              <button class="toolbar-btn" @click="showDedup = true">🔍 查重</button>
+              <div class="export-dropdown">
+                <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出</button>
+                <div v-if="showExportMenu" class="export-menu">
+                  <button @click="exportMetadata('json')">JSON 格式</button>
+                  <button @click="exportMetadata('csv')">CSV 格式</button>
+                </div>
               </div>
-            </div>
-          </template>
+            </template>
+          </div>
         </div>
+        <ThumbnailGrid
+          :workspace-id="workspaceId"
+          :select-mode="selectMode"
+          @select-detail="(id: number) => imageStore.fetchDetail(id)"
+        />
       </div>
-      <ThumbnailGrid
-        :workspace-id="workspaceId"
-        :select-mode="selectMode"
-        @select-detail="(id: number) => imageStore.fetchDetail(id)"
-      />
-    </div>
-    <DetailPanel v-if="imageStore.selectedDetail" :workspace-id="workspaceId" />
+      <DetailPanel v-if="imageStore.selectedDetail" :workspace-id="workspaceId" />
+    </template>
   </div>
 
   <!-- Toast notification -->

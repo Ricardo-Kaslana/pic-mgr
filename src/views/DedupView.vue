@@ -1,26 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 
-interface DuplicateGroup {
-  hash: string
-  images: any[]
-}
+const props = defineProps<{ workspaceId: number }>()
+const emit = defineEmits<{ close: [] }>()
 
-const route = useRoute()
-const router = useRouter()
-const workspaceId = ref(Number(route.params.id))
-const groups = ref<DuplicateGroup[]>([])
+const groups = ref<any[]>([])
 const loading = ref(true)
 const error = ref('')
 
 onMounted(async () => {
   try {
-    const result = await invoke<DuplicateGroup[]>('find_duplicates', { workspaceId: workspaceId.value })
+    const result = await invoke<any[]>('find_duplicates', { workspaceId: props.workspaceId })
     groups.value = result || []
   } catch (e: any) {
-    console.error('Failed to find duplicates:', e)
+    console.error('[DedupView] error:', e)
     error.value = String(e)
   } finally {
     loading.value = false
@@ -40,22 +34,18 @@ async function removeImage(id: number) {
   if (confirm('从工作区移除此图片？不会删除原始文件。')) {
     try {
       await invoke('delete_image', { id })
-      groups.value = await invoke('find_duplicates', { workspaceId: workspaceId.value }) || []
+      groups.value = await invoke<any[]>('find_duplicates', { workspaceId: props.workspaceId }) || []
     } catch (e) {
       console.error('Failed to remove:', e)
     }
   }
-}
-
-function goBack() {
-  router.push(`/workspace/${workspaceId.value}`)
 }
 </script>
 
 <template>
   <div class="dedup-view">
     <header class="dedup-header">
-      <button class="back-btn" @click="goBack">← 返回</button>
+      <button class="back-btn" @click="emit('close')">← 返回</button>
       <h1>重复图片检测</h1>
       <span class="count" v-if="!loading && !error">{{ groups.length }} 组重复</span>
     </header>
@@ -87,6 +77,7 @@ function goBack() {
 
 <style scoped>
 .dedup-view {
+  flex: 1;
   padding: 24px;
   height: 100%;
   overflow-y: auto;
