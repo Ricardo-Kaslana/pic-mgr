@@ -7,11 +7,12 @@
 - **Multi-size thumbnail presets**: S (120px) / M (200px) / L (320px) buttons in settings
 - **Workspace rescan button**: 🔄 button on workspace cards to re-scan for new images
 - **Right-click context menu**: Open in Explorer, copy file path, remove from workspace
-- **Export metadata**: Export workspace metadata to JSON or CSV with browser download
+- **Export metadata**: Export to JSON/CSV with system save dialog; respects selection (选中图片 or 全部); toast success notification
 - **Image deduplication**: SHA-256 based duplicate detection page (`/workspace/:id/dedup`)
 - **i18n support**: vue-i18n with Chinese (zh-CN) and English (en) translations
 - **Image preview**: Detail panel now shows actual thumbnail image instead of placeholder
 - **Backend commands**: `open_in_explorer`, `delete_image`, `find_duplicates`
+- **Tauri plugins**: `tauri-plugin-dialog`, `tauri-plugin-fs` for save dialog and file writing
 
 ### Changed
 
