@@ -12,6 +12,7 @@
 - **i18n support**: vue-i18n with Chinese (zh-CN) and English (en) translations
 - **Image preview**: Detail panel now shows actual thumbnail image instead of placeholder
 - **Backend commands**: `open_in_explorer`, `delete_image`, `find_duplicates`
+- **Workspace quick add**: Folder picker dialog (📂 浏览) in create workspace, auto-fills name from folder
 - **Tauri plugins**: `tauri-plugin-dialog`, `tauri-plugin-fs` for save dialog and file writing
 
 ### Changed
