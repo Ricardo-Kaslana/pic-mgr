@@ -8,7 +8,7 @@
 - **Workspace rescan button**: 🔄 button on workspace cards to re-scan for new images
 - **Right-click context menu**: Open in Explorer, copy file path, remove from workspace
 - **Export metadata**: Export to JSON/CSV with system save dialog; respects selection (选中图片 or 全部); toast success notification
-- **Image deduplication**: SHA-256 based duplicate detection page (`/workspace/:id/dedup`)
+- **Image deduplication**: SHA-256 based duplicate detection (embedded in BrowserView)
 - **i18n support**: vue-i18n with Chinese (zh-CN) and English (en) translations
 - **Image preview**: Detail panel now shows actual thumbnail image instead of placeholder
 - **Backend commands**: `open_in_explorer`, `delete_image`, `find_duplicates`
@@ -21,6 +21,16 @@
 - **Click behavior redesign**: single click now opens detail panel (was: select); added explicit "☐ 选择" button to enter select mode with 全选/取消全选/完成 buttons
 - `ThumbnailGrid` accepts `selectMode` prop to branch click behavior
 - Escape key exits select mode first, then clears detail panel
+- DedupView embedded as component inside BrowserView (not a separate route)
+
+### Fixed
+
+- **Black screen on dedup click**: Caused by Vue Router treating `/workspace/:id/dedup` as nested child of `/workspace/:id` with no `<router-view>`. Fixed by embedding DedupView as component.
+- **Black screen on re-entering workspace**: Caused by Vue transition `mode="out-in"` getting stuck. Removed mode, added `imageStore.reset()` and `selection.clear()` on mount.
+- **Toast not visible**: `<style scoped>` cannot style Teleported elements. Changed to `:global()`.
+- **Dedup crash on null fields**: `formatSize` now handles null/undefined `file_size`.
+- **Rust borrow lifetime**: `stmt.query_map()` result bound to local variable to avoid premature drop.
+- **find_duplicates panic protection**: Wrapped in `catch_unwind` to prevent app crash.
 
 ## [0.1.0] — 2026-06-07
 
