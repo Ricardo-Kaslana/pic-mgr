@@ -5,19 +5,26 @@ use crate::AppState;
 pub fn export_metadata(
     state: State<AppState>,
     workspace_id: i64,
+    image_ids: Option<Vec<i64>>,
     format: String,
 ) -> Result<String, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
 
-    let mut stmt = conn.prepare("SELECT id FROM images WHERE workspace_id = ?1")
-        .map_err(|e| e.to_string())?;
-    let image_ids: Vec<i64> = stmt.query_map(rusqlite::params![workspace_id], |row| row.get(0))
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
+    let ids: Vec<i64> = match image_ids {
+        Some(ids) => ids,
+        None => {
+            let mut stmt = conn.prepare("SELECT id FROM images WHERE workspace_id = ?1")
+                .map_err(|e| e.to_string())?;
+            let result: Vec<i64> = stmt.query_map(rusqlite::params![workspace_id], |row| row.get(0))
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect();
+            result
+        }
+    };
 
     let mut records = Vec::new();
-    for id in image_ids {
+    for id in ids {
         if let Ok(Some(record)) = crate::db::queries::get_image_detail(&conn, id) {
             let tags = crate::db::queries::get_tags_for_image(&conn, id).unwrap_or_default();
             records.push(serde_json::json!({

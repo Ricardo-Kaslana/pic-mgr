@@ -2,6 +2,8 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
+import { save } from '@tauri-apps/plugin-dialog'
+import { writeTextFile } from '@tauri-apps/plugin-fs'
 import { useWorkspaceStore } from '../stores/workspace'
 import { useImageStore } from '../stores/images'
 import { useSelectionStore } from '../stores/selection'
@@ -43,23 +45,39 @@ onMounted(async () => {
   await tagStore.fetchTags(workspaceId.value)
 })
 
+const toastMessage = ref('')
+const toastVisible = ref(false)
+
+function showToast(msg: string) {
+  toastMessage.value = msg
+  toastVisible.value = true
+  setTimeout(() => { toastVisible.value = false }, 3000)
+}
+
 async function exportMetadata(format: 'json' | 'csv') {
   showExportMenu.value = false
+
+  // Determine which images to export
+  const ids = selection.count > 0 ? Array.from(selection.selectedIds) : null
+
+  // Open save dialog
+  const filePath = await save({
+    defaultPath: `pic-mgr-export.${format}`,
+    filters: [{ name: format.toUpperCase(), extensions: [format] }],
+  })
+  if (!filePath) return
+
   try {
     const result = await invoke<string>('export_metadata', {
       workspaceId: workspaceId.value,
+      imageIds: ids,
       format,
     })
-    // Trigger download
-    const blob = new Blob([result], { type: format === 'json' ? 'application/json' : 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `pic-mgr-export.${format}`
-    a.click()
-    URL.revokeObjectURL(url)
+    await writeTextFile(filePath, result)
+    showToast(`导出成功：${filePath}`)
   } catch (e) {
     console.error('Export failed:', e)
+    showToast(`导出失败：${e}`)
   }
 }
 
@@ -100,6 +118,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
             <span class="selection-info">已选 {{ selection.count }} 张</span>
             <button class="toolbar-btn" @click="selectAll">全选</button>
             <button class="toolbar-btn" @click="deselectAll">取消全选</button>
+            <div class="export-dropdown">
+              <button class="toolbar-btn" @click="showExportMenu = !showExportMenu">📤 导出选中</button>
+              <div v-if="showExportMenu" class="export-menu">
+                <button @click="exportMetadata('json')">JSON 格式</button>
+                <button @click="exportMetadata('csv')">CSV 格式</button>
+              </div>
+            </div>
             <button class="toolbar-btn active" @click="toggleSelectMode">✓ 完成</button>
           </template>
           <template v-else>
@@ -123,6 +148,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     </div>
     <DetailPanel v-if="imageStore.selectedDetail" :workspace-id="workspaceId" />
   </div>
+
+  <!-- Toast notification -->
+  <Teleport to="body">
+    <Transition name="toast">
+      <div v-if="toastVisible" class="toast">{{ toastMessage }}</div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -183,4 +215,23 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   cursor: pointer;
 }
 .export-menu button:hover { background: var(--accent-bg); }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--text-primary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 2000;
+  max-width: 500px;
+  word-break: break-all;
+}
+.toast-enter-active, .toast-leave-active { transition: all 0.3s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 </style>
