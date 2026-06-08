@@ -14,18 +14,21 @@ const router = useRouter()
 const workspaceId = ref(Number(route.params.id))
 const groups = ref<DuplicateGroup[]>([])
 const loading = ref(true)
+const error = ref('')
 
 onMounted(async () => {
   try {
     groups.value = await invoke('find_duplicates', { workspaceId: workspaceId.value })
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to find duplicates:', e)
+    error.value = String(e)
   } finally {
     loading.value = false
   }
 })
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number | null | undefined): string {
+  if (bytes == null) return '—'
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / 1048576).toFixed(1) + ' MB'
@@ -48,10 +51,15 @@ function goBack() {
     <header class="dedup-header">
       <button class="back-btn" @click="goBack">← 返回</button>
       <h1>重复图片检测</h1>
-      <span class="count" v-if="!loading">{{ groups.length }} 组重复</span>
+      <span class="count" v-if="!loading && !error">{{ groups.length }} 组重复</span>
     </header>
 
     <div v-if="loading" class="loading">扫描中...</div>
+
+    <div v-else-if="error" class="error">
+      <p>⚠️ 加载失败</p>
+      <p class="error-detail">{{ error }}</p>
+    </div>
 
     <div v-else-if="groups.length === 0" class="empty">
       <p>🎉 没有发现重复图片</p>
@@ -68,7 +76,7 @@ function goBack() {
             <div class="item-info">
               <p class="file-name">{{ img.file_name }}</p>
               <p class="file-path">{{ img.relative_path }}</p>
-              <p class="file-meta">{{ formatSize(img.file_size) }} · {{ img.format }}</p>
+              <p class="file-meta">{{ formatSize(img.file_size) }} · {{ img.format || '—' }}</p>
             </div>
             <button class="remove-btn" @click="removeImage(img.id)">移除</button>
           </div>
@@ -103,6 +111,8 @@ h1 { font-size: 20px; font-weight: 600; }
 .count { font-size: 13px; color: var(--text-muted); }
 .loading { text-align: center; padding: 60px 0; color: var(--text-muted); }
 .empty { text-align: center; padding: 60px 0; color: var(--text-muted); font-size: 16px; }
+.error { text-align: center; padding: 60px 0; color: var(--danger); }
+.error-detail { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .groups { display: flex; flex-direction: column; gap: 20px; }
 .dup-group {
   background: var(--bg-secondary);

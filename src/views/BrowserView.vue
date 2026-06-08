@@ -216,7 +216,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 }
 .export-menu button:hover { background: var(--accent-bg); }
 
-.toast {
+:global(.toast) {
   position: fixed;
   bottom: 24px;
   left: 50%;
@@ -232,6 +232,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   max-width: 500px;
   word-break: break-all;
 }
-.toast-enter-active, .toast-leave-active { transition: all 0.3s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
+:global(.toast-enter-active), :global(.toast-leave-active) { transition: all 0.3s ease; }
+:global(.toast-enter-from), :global(.toast-leave-to) { opacity: 0; transform: translateX(-50%) translateY(10px); }
 </style>
