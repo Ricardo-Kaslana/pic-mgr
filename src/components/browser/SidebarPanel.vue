@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTagStore } from '../../stores/tags'
 import { useImageStore } from '../../stores/images'
 import SearchBar from './SearchBar.vue'
 import TagFilter from './TagFilter.vue'
 
 const props = defineProps<{ workspaceId: number }>()
+const { t } = useI18n()
 
 const tagStore = useTagStore()
 const imageStore = useImageStore()
@@ -33,26 +35,57 @@ function clearFilters() {
 <template>
   <div class="sidebar-panel">
     <SearchBar :workspace-id="workspaceId" />
+    <div class="section-divider"></div>
     <TagFilter />
-    <button class="secondary" style="width:100%" @click="fetchWithFilters">应用筛选</button>
-    <button class="clear-link" @click="clearFilters">清除所有筛选</button>
+    <div class="filter-actions">
+      <button class="apply-btn" @click="fetchWithFilters">{{ t('sidebar.apply') }}</button>
+      <button class="clear-btn" @click="clearFilters">{{ t('sidebar.clear') }}</button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .sidebar-panel {
-  width: 240px;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
-  padding: 16px;
+  padding: 14px;
   overflow-y: auto;
-  flex-shrink: 0;
 }
-.clear-link {
-  display: block; width: 100%; margin-top: 8px;
-  background: none; color: var(--text-muted);
-  font-size: 12px; padding: 4px;
+.section-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 14px 0;
 }
-.clear-link:hover { color: var(--text-secondary); }
+.filter-actions {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.apply-btn {
+  width: 100%;
+  padding: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+.apply-btn:hover { background: var(--accent-hover); box-shadow: 0 2px 12px var(--accent-glow); }
+.apply-btn:active { opacity: 0.9; transform: scale(0.98); }
+.clear-btn {
+  width: 100%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 6px;
+  border-radius: var(--radius-xs);
+  font-weight: 450;
+  transition: all var(--transition-fast);
+}
+.clear-btn:hover { color: var(--text-secondary); background: var(--bg-tertiary); }
+.clear-btn:active { opacity: 0.7; }
 </style>

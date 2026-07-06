@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { shallowRef, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 const MAX_CACHE_SIZE = 500
 
 export const useThumbnailStore = defineStore('thumbnail', () => {
-  const cache = ref<Map<number, string>>(new Map())
-  const loading = ref<Set<number>>(new Set())
-  // Track access order for LRU eviction
+  // shallowRef: avoids Vue proxying each Map entry; we mutate in-place and trigger manually
+  const cache = shallowRef<Map<number, string>>(new Map())
+  const loading = shallowRef<Set<number>>(new Set())
   const accessOrder = ref<number[]>([])
 
   function touchAccess(imageId: number) {
@@ -22,9 +22,7 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
       const url = cache.value.get(oldest)
       if (url) {
         URL.revokeObjectURL(url)
-        const newCache = new Map(cache.value)
-        newCache.delete(oldest)
-        cache.value = newCache
+        cache.value.delete(oldest)
       }
     }
   }
@@ -36,7 +34,7 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     }
     if (loading.value.has(imageId)) return null
 
-    loading.value = new Set([...loading.value, imageId])
+    loading.value.add(imageId)
     try {
       const bytes = await invoke<number[]>('get_thumbnail', { imageId })
       const uint8 = new Uint8Array(bytes)
@@ -44,17 +42,15 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
       const url = URL.createObjectURL(blob)
 
       evictOldest()
-      const newCache = new Map(cache.value)
-      newCache.set(imageId, url)
-      cache.value = newCache
+      cache.value.set(imageId, url)
+      cache.value = new Map(cache.value) // trigger shallowRef update
       touchAccess(imageId)
       return url
     } catch {
       return null
     } finally {
-      const newLoading = new Set(loading.value)
-      newLoading.delete(imageId)
-      loading.value = newLoading
+      loading.value.delete(imageId)
+      loading.value = new Set(loading.value) // trigger shallowRef update
     }
   }
 
@@ -62,9 +58,8 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     const url = cache.value.get(imageId)
     if (url) {
       URL.revokeObjectURL(url)
-      const newCache = new Map(cache.value)
-      newCache.delete(imageId)
-      cache.value = newCache
+      cache.value.delete(imageId)
+      cache.value = new Map(cache.value) // trigger shallowRef update
       const idx = accessOrder.value.indexOf(imageId)
       if (idx !== -1) accessOrder.value.splice(idx, 1)
     }

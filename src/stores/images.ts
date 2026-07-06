@@ -10,6 +10,7 @@ export const useImageStore = defineStore('images', () => {
   const pageSize = ref(100)
   const loading = ref(false)
   const selectedDetail = ref<ImageDetail | null>(null)
+  const lastSelectedId = ref<number | null>(null)
 
   const filters = reactive<ImageFilters>({
     tag_ids: null,
@@ -17,7 +18,7 @@ export const useImageStore = defineStore('images', () => {
     rating_min: null,
     date_from: null,
     date_to: null,
-    sort_by: 'date',
+    sort_by: 'indexed_at',
     sort_dir: 'desc',
   })
 
@@ -42,6 +43,7 @@ export const useImageStore = defineStore('images', () => {
   }
 
   async function fetchDetail(imageId: number) {
+    lastSelectedId.value = imageId
     selectedDetail.value = await invoke<ImageDetail>('get_image_detail', { imageId })
   }
 
@@ -63,12 +65,20 @@ export const useImageStore = defineStore('images', () => {
 
   function setPage(p: number) { page.value = p }
 
+  function setSort(by: string, dir: string, wsId: number) {
+    filters.sort_by = by
+    filters.sort_dir = dir
+    page.value = 1
+    fetchImages(wsId)
+  }
+
   function reset() {
     images.value = []
     total.value = 0
     page.value = 1
     selectedDetail.value = null
+    lastSelectedId.value = null
   }
 
-  return { images, total, page, pageSize, loading, selectedDetail, filters, fetchImages, fetchDetail, search, setPage, reset }
+  return { images, total, page, pageSize, loading, selectedDetail, lastSelectedId, filters, fetchImages, fetchDetail, search, setPage, setSort, reset }
 })

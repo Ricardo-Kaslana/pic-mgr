@@ -69,7 +69,7 @@ watch(() => settings.language, (lang) => {
     <div class="section">
       <h3>{{ $t('settings.about') }}</h3>
       <div class="about">
-        <p><strong>PicMgr</strong> v0.1.0</p>
+        <p><strong>PicMgr</strong> v0.3.0</p>
         <p class="desc">{{ $t('settings.aboutDesc') }}</p>
         <p class="desc">Tauri + Vue 3 + SQLite</p>
       </div>
@@ -79,41 +79,51 @@ watch(() => settings.language, (lang) => {
 
 <style scoped>
 .settings-page {
-  padding: 32px;
+  padding: 36px;
   max-width: 640px;
   margin: 0 auto;
   height: 100%;
   overflow-y: auto;
 }
-h1 { font-size: 24px; font-weight: 700; margin-bottom: 28px; }
-.section { margin-bottom: 28px; }
-.section h3 { font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+h1 { font-size: 22px; font-weight: 700; margin-bottom: 32px; letter-spacing: -0.02em; }
+.section { margin-bottom: 32px; }
+.section h3 {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
 .setting-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px;
+  padding: 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   margin-bottom: 8px;
+  transition: border-color var(--transition-fast);
 }
-.setting-label .title { font-size: 14px; font-weight: 500; }
-.setting-label .desc { font-size: 12px; color: var(--text-muted); display: block; margin-top: 2px; }
-select {
-  min-width: 120px;
-}
-.size-presets { display: flex; gap: 6px; }
+.setting-row:hover { border-color: var(--border); }
+.setting-label .title { font-size: 14px; font-weight: 550; }
+.setting-label .desc { font-size: 12px; color: var(--text-muted); display: block; margin-top: 3px; }
+select { min-width: 120px; }
+.size-presets { display: flex; gap: 4px; }
 .preset-btn {
-  width: 36px; height: 32px;
+  width: 38px; height: 34px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 13px; font-weight: 600;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px; font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
-.preset-btn:hover { border-color: var(--accent); }
-.preset-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.about p { margin-bottom: 4px; }
+.preset-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.preset-btn:active { transform: scale(0.95); }
+.preset-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.preset-btn.active:hover { background: var(--accent-hover); }
+.about { padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); }
+.about p { margin-bottom: 4px; font-size: 13px; }
 .about .desc { font-size: 12px; color: var(--text-muted); }
 </style>
