@@ -1,4 +1,22 @@
 node_modules/
 dist/
 src-tauri/target/
+temp/
+*.tsbuildinfo
+
+# AI / IDE
+.claude/
+.codegraph/
+.omo/
 .superpowers/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
+*.log
