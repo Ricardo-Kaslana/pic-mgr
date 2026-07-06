@@ -146,5 +146,6 @@ export default {
     title: 'Select target workspace',
     confirm: 'Move',
     currentWorkspace: 'Current workspace',
+    noWorkspaces: 'No other workspaces available',
   },
 }
