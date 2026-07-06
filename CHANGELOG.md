@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2] — 2026-07-06
+
+### Optimized
+
+- **Thumbnail format: WebP lossless → JPEG quality 80**: 10-20x faster encoding for first-time thumbnail generation with no visible quality difference at 300px. Existing `.webp` cache files are ignored; new `.jpg` files generate on demand.
+- **Parallel initial data fetch**: `fetchAll`, `fetchImages`, and `fetchTags` now run in parallel via `Promise.all` instead of sequentially — ~40% faster workspace open.
+- **Thumbnail concurrency limiter**: Max 4 parallel IPC calls prevents overwhelming the backend when 30+ thumbnails enter viewport simultaneously. Queue-based scheduling with inflight tracking.
+- **Reduced first page size**: Initial page from 100 to 50 images for faster first paint.
+
 ## [0.3.1] — 2026-07-06
 
 ### Fixed
