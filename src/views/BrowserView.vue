@@ -130,6 +130,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           @select-detail="(id: number) => imageStore.fetchDetail(id)"
           @refresh="() => { imageStore.setPage(1); imageStore.fetchImages(workspaceId) }"
           @view-fullscreen="openFullscreen"
+          @show-toast="showToast"
         />
       </div>
       <button

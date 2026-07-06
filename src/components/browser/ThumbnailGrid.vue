@@ -17,6 +17,7 @@ const emit = defineEmits<{
   selectDetail: [id: number]
   refresh: []
   viewFullscreen: [index: number]
+  showToast: [msg: string]
 }>()
 
 const imageStore = useImageStore()
@@ -233,13 +234,22 @@ async function handleWorkspaceSelected(targetWsId: number) {
   if (!contextMenu.image) return
   const { invoke } = await import('@tauri-apps/api/core')
   try {
-    await invoke('move_images', {
+    const result = await invoke<{ success: number; failed: number; errors: string[] }>('move_images', {
       ids: [contextMenu.image.id],
       destWorkspaceId: targetWsId,
     })
-    emit('refresh')
+    if (result.failed > 0) {
+      const details = result.errors.length > 0 ? `\n${result.errors.join('\n')}` : ''
+      emit('showToast', t('browser.movePartial', { success: result.success, failed: result.failed }) + details)
+    } else {
+      emit('showToast', t('browser.moveSuccess', { count: result.success }))
+    }
+    if (result.success > 0) {
+      emit('refresh')
+    }
   } catch (e) {
     console.error('Move to workspace failed:', e)
+    emit('showToast', t('browser.moveFailed', { error: String(e) }))
   }
 }
 
