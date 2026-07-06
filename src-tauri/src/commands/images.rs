@@ -24,38 +24,19 @@ fn find_duplicates_inner(
         rows.filter_map(|r| r.ok()).collect()
     };
 
+    // Prepare statement once, reuse for all hash lookups
+    let mut img_stmt = conn.prepare(
+        "SELECT id, workspace_id, relative_path, file_name, file_size, file_hash, width, height, format, thumbnail_path, notes, rating, created_at, file_created_at, updated_at, indexed_at, last_viewed_at
+         FROM images WHERE file_hash = ?1 AND workspace_id = ?2"
+    ).map_err(|e| e.to_string())?;
+
     let mut groups = Vec::new();
     for hash in hashes {
-        let images: Vec<crate::models::ImageRecord> = {
-            let mut img_stmt = conn.prepare(
-                "SELECT id, workspace_id, relative_path, file_name, file_size, file_hash, width, height, format, thumbnail_path, notes, rating, created_at, updated_at, indexed_at, last_viewed_at
-                 FROM images WHERE file_hash = ?1 AND workspace_id = ?2"
-            ).map_err(|e| e.to_string())?;
-            let rows = img_stmt.query_map(
-                rusqlite::params![hash, workspace_id],
-                |row| {
-                    Ok(crate::models::ImageRecord {
-                        id: row.get(0)?,
-                        workspace_id: row.get(1)?,
-                        relative_path: row.get(2)?,
-                        file_name: row.get(3)?,
-                        file_size: row.get(4)?,
-                        file_hash: row.get(5)?,
-                        width: row.get(6)?,
-                        height: row.get(7)?,
-                        format: row.get(8)?,
-                        thumbnail_path: row.get(9)?,
-                        notes: row.get(10)?,
-                        rating: row.get(11)?,
-                        created_at: row.get(12)?,
-                        updated_at: row.get(13)?,
-                        indexed_at: row.get(14)?,
-                        last_viewed_at: row.get(15)?,
-                    })
-                }
-            ).map_err(|e| e.to_string())?;
-            rows.filter_map(|r| r.ok()).collect()
-        };
+        let rows = img_stmt.query_map(
+            rusqlite::params![hash, workspace_id],
+            crate::db::queries::row_to_image_record,
+        ).map_err(|e| e.to_string())?;
+        let images: Vec<crate::models::ImageRecord> = rows.filter_map(|r| r.ok()).collect();
 
         if !images.is_empty() {
             groups.push(DuplicateGroup { hash, images });

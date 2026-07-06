@@ -24,6 +24,7 @@ pub struct ImageRecord {
     pub notes: Option<String>,
     pub rating: Option<i32>,
     pub created_at: Option<String>,
+    pub file_created_at: Option<String>,
     pub updated_at: String,
     pub indexed_at: String,
     pub last_viewed_at: Option<String>,
@@ -89,4 +90,18 @@ pub struct ThumbnailProgress {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportOptions {
     pub format: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TrashResult {
+    pub success: usize,
+    pub failed: usize,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MoveResult {
+    pub success: usize,
+    pub failed: usize,
+    pub errors: Vec<String>,
 }

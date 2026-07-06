@@ -35,10 +35,16 @@ fn compute_file_hash(path: &Path) -> Option<String> {
     Some(format!("{:x}", hasher.finalize()))
 }
 
-fn file_modified_at(path: &Path) -> Option<String> {
-    let metadata = fs::metadata(path).ok()?;
+fn file_modified_at(metadata: &fs::Metadata) -> Option<String> {
     let modified = metadata.modified().ok()?;
     let duration = modified.duration_since(UNIX_EPOCH).ok()?;
+    let dt = chrono_lite(duration.as_secs() as i64);
+    Some(dt)
+}
+
+fn file_created_at(metadata: &fs::Metadata) -> Option<String> {
+    let created = metadata.created().ok()?;
+    let duration = created.duration_since(UNIX_EPOCH).ok()?;
     let dt = chrono_lite(duration.as_secs() as i64);
     Some(dt)
 }
@@ -125,9 +131,11 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
             let format = path.extension()
                 .and_then(|e| e.to_str())
                 .map(|e| e.to_lowercase());
-            let file_size = fs::metadata(&path).ok().map(|m| m.len() as i64);
+            let metadata = fs::metadata(&path).ok();
+            let file_size = metadata.as_ref().map(|m| m.len() as i64);
             let file_hash = compute_file_hash(&path);
-            let created_at = file_modified_at(&path);
+            let created_at = metadata.as_ref().and_then(file_modified_at);
+            let file_created_at = metadata.as_ref().and_then(file_created_at);
             let now = chrono_lite_now();
 
             ImageRecord {
@@ -144,6 +152,7 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
                 notes: None,
                 rating: None,
                 created_at,
+                file_created_at,
                 updated_at: now.clone(),
                 indexed_at: now,
                 last_viewed_at: None,

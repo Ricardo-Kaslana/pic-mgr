@@ -27,10 +27,12 @@ pub fn scan_workspace(state: State<AppState>, id: i64) -> Result<ScanProgress, S
 
     for chunk in image_records.chunks(batch_size) {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
         for record in chunk {
             crate::db::queries::insert_image(&conn, record).map_err(|e| e.to_string())?;
             processed += 1;
         }
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
     }
 
     Ok(ScanProgress {

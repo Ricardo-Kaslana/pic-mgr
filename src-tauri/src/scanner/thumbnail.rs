@@ -1,4 +1,5 @@
 use image::GenericImageView;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 pub struct ThumbnailCache {
@@ -20,29 +21,23 @@ impl ThumbnailCache {
     }
 
     pub fn generate(&self, source_path: &Path, image_id: i64) -> Result<String, String> {
-        // Log file info for debugging
-        let file_size = std::fs::metadata(source_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        // Read file once into buffer (was 3 separate reads: metadata + magic + decode)
+        let buf = std::fs::read(source_path)
+            .map_err(|e| format!("Cannot read file: {}", e))?;
+        let file_size = buf.len();
+
         let ext = source_path.extension()
             .and_then(|e| e.to_str())
             .unwrap_or("none");
 
-        // Read first 16 bytes to check magic bytes
-        let magic = std::fs::read(source_path)
-            .map(|buf| {
-                if buf.len() >= 4 {
-                    format!("{:02X} {:02X} {:02X} {:02X}", buf[0], buf[1], buf[2], buf[3])
-                } else {
-                    "file too small".to_string()
-                }
-            })
-            .unwrap_or_else(|_| "cannot read".to_string());
+        let magic = if buf.len() >= 4 {
+            format!("{:02X} {:02X} {:02X} {:02X}", buf[0], buf[1], buf[2], buf[3])
+        } else {
+            "file too small".to_string()
+        };
 
-        // Use Reader with with_guessed_format() to detect format from file header
-        // instead of relying on extension
-        let img = image::io::Reader::open(source_path)
-            .map_err(|e| format!("Cannot open for reading: {}", e))?
+        // Decode from buffer instead of re-reading from disk
+        let img = image::ImageReader::new(Cursor::new(&buf))
             .with_guessed_format()
             .map_err(|e| format!("Cannot guess format: {}", e))?
             .decode()
