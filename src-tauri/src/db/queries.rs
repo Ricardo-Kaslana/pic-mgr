@@ -339,15 +339,19 @@ pub fn batch_update_tags(
 
 pub fn get_tags(conn: &Connection, workspace_id: i64) -> Result<Vec<TagWithCount>> {
     let mut stmt = conn.prepare(
-        "SELECT t.id, t.name, t.color, COUNT(it.image_id) as cnt
+        "SELECT t.id, t.name, t.color,
+                (SELECT COUNT(*) FROM image_tags it
+                 INNER JOIN images i ON it.image_id = i.id
+                 WHERE it.tag_id = t.id AND i.workspace_id = ?1) as cnt
          FROM tags t
-         LEFT JOIN image_tags it ON t.id = it.tag_id
-         LEFT JOIN images i ON it.image_id = i.id AND i.workspace_id = ?1
-         GROUP BY t.id
-         HAVING cnt > 0
+         WHERE EXISTS (
+           SELECT 1 FROM image_tags it
+           INNER JOIN images i ON it.image_id = i.id
+           WHERE it.tag_id = t.id AND i.workspace_id = ?1
+         )
          ORDER BY cnt DESC"
     )?;
-    let rows = stmt.query_map(params![workspace_id], |row| {
+    let rows = stmt.query_map(params![workspace_id, workspace_id], |row| {
         Ok(TagWithCount {
             tag: Tag {
                 id: row.get(0)?,

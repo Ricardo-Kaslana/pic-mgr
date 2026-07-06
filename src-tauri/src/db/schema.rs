@@ -62,4 +62,6 @@ END;
 
 CREATE INDEX IF NOT EXISTS idx_images_hash ON images(file_hash);
 CREATE INDEX IF NOT EXISTS idx_image_tags_tag_id ON image_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_id ON images(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_indexed ON images(workspace_id, indexed_at DESC);
 ";
