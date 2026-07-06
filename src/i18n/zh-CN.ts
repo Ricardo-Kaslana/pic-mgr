@@ -55,6 +55,7 @@ export default {
     exportSuccess: '导出成功：{path}',
     exportFailed: '导出失败：{error}',
     locateLast: '定位',
+    backToWorkspaces: '返回工作区',
   },
   sidebar: {
     search: '搜索文件名、路径或备注...',

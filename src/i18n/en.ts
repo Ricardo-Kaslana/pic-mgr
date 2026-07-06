@@ -57,6 +57,7 @@ export default {
     exportSuccess: 'Export succeeded: {path}',
     exportFailed: 'Export failed: {error}',
     locateLast: 'Locate',
+    backToWorkspaces: 'Back to workspaces',
   },
   sidebar: {
     search: 'Search filename, path or notes...',

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { save, open } from '@tauri-apps/plugin-dialog'
 import { writeTextFile } from '@tauri-apps/plugin-fs'
@@ -17,6 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const imageStore = useImageStore()
 const selection = useSelectionStore()
 const tagStore = useTagStore()
@@ -24,6 +26,8 @@ const tagStore = useTagStore()
 const selectMode = defineModel<boolean>('selectMode', { default: false })
 const showSortMenu = ref(false)
 const showExportMenu = ref(false)
+
+function goBack() { router.push('/') }
 
 const sortOptions = computed(() => [
   { value: 'name', label: t('sort.name') },
@@ -145,6 +149,11 @@ async function batchMove() {
 <template>
   <div class="grid-header">
     <div class="header-left">
+      <button class="toolbar-btn back-btn" :title="t('browser.backToWorkspaces')" @click="goBack">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 2L4 8l6 6"/>
+        </svg>
+      </button>
       <span class="image-count">{{ t('browser.imageCount', { count: imageStore.total }) }}</span>
       <div class="sort-dropdown">
         <button class="toolbar-btn sort-btn" aria-haspopup="listbox" :aria-expanded="showSortMenu" @click="showSortMenu = !showSortMenu">
@@ -228,7 +237,17 @@ async function batchMove() {
   border-bottom: 1px solid var(--border);
 }
 .image-count { font-size: 13px; color: var(--text-muted); font-weight: 450; }
-.header-left { display: flex; align-items: center; gap: 12px; }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+.back-btn svg { flex-shrink: 0; }
 .header-actions { display: flex; align-items: center; gap: 6px; }
 .btn-group { display: flex; align-items: center; gap: 4px; }
 .divider { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
