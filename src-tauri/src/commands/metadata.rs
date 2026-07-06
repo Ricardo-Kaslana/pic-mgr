@@ -217,6 +217,10 @@ pub fn move_images(
                     break;
                 }
             }
+            if dest_file.exists() {
+                errors.push(format!("Too many name conflicts for {}", img.file_name));
+                continue;
+            }
         }
 
         // Try rename first; fall back to copy+delete for cross-drive moves
