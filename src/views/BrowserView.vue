@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { listen } from '@tauri-apps/api/event'
 import { useWorkspaceStore } from '../stores/workspace'
 import { useImageStore } from '../stores/images'
 import { useSelectionStore } from '../stores/selection'
@@ -13,6 +14,7 @@ import ThumbnailGrid from '../components/browser/ThumbnailGrid.vue'
 import DetailPanel from '../components/browser/DetailPanel.vue'
 import DedupView from './DedupView.vue'
 import LightboxViewer from '../components/common/LightboxViewer.vue'
+import type { ScanProgress } from '../types'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -28,6 +30,9 @@ const showDedup = ref(false)
 const gridRef = ref<InstanceType<typeof ThumbnailGrid> | null>(null)
 const sidebarCollapsed = ref(false)
 const detailCollapsed = ref(false)
+const scanning = ref(false)
+const scanProgress = ref<ScanProgress | null>(null)
+let unlistenScan: (() => void) | null = null
 
 watch(() => imageStore.selectedDetail, (detail) => {
   if (detail) detailCollapsed.value = false
@@ -56,6 +61,20 @@ onMounted(async () => {
     workspaceStore.select(workspaceId.value)
     await imageStore.fetchImages(workspaceId.value)
     await tagStore.fetchTags(workspaceId.value)
+
+    // If workspace is empty, a scan may be in progress — show overlay
+    if (imageStore.images.length === 0 && workspaceStore.currentId === workspaceId.value) {
+      scanning.value = true
+    }
+
+    unlistenScan = await listen<ScanProgress>('scan-progress', (event) => {
+      scanProgress.value = event.payload
+      if (event.payload.finished) {
+        scanning.value = false
+        imageStore.fetchImages(workspaceId.value)
+        tagStore.fetchTags(workspaceId.value)
+      }
+    })
   } catch (e) {
     console.error('[BrowserView] init failed:', e)
   }
@@ -90,7 +109,13 @@ function onKeyDown(e: KeyboardEvent) {
 }
 
 onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  if (unlistenScan) {
+    unlistenScan()
+    unlistenScan = null
+  }
+})
 </script>
 
 <template>
@@ -123,15 +148,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           @show-dedup="showDedup = true"
           @locate-last="locateImage"
         />
-        <ThumbnailGrid
-          ref="gridRef"
-          :workspace-id="workspaceId"
-          :select-mode="selectMode"
-          @select-detail="(id: number) => imageStore.fetchDetail(id)"
-          @refresh="async () => { imageStore.setPage(1); await imageStore.fetchImages(workspaceId); await tagStore.fetchTags(workspaceId) }"
-          @view-fullscreen="openFullscreen"
-          @show-toast="showToast"
-        />
+        <div class="grid-wrapper" style="position: relative; flex: 1; overflow: hidden;">
+          <ThumbnailGrid
+            ref="gridRef"
+            :workspace-id="workspaceId"
+            :select-mode="selectMode"
+            @select-detail="(id: number) => imageStore.fetchDetail(id)"
+            @refresh="async () => { imageStore.setPage(1); await imageStore.fetchImages(workspaceId); await tagStore.fetchTags(workspaceId) }"
+            @view-fullscreen="openFullscreen"
+            @show-toast="showToast"
+          />
+          <div v-if="scanning" class="scan-overlay">
+            <div class="scan-spinner"></div>
+            <p>{{ t('browser.scanning', { processed: scanProgress?.processed ?? 0, total: scanProgress?.total ?? 0 }) }}</p>
+          </div>
+        </div>
       </div>
       <button
         v-if="imageStore.selectedDetail"
@@ -269,4 +300,32 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 }
 :global(.toast-enter-active), :global(.toast-leave-active) { transition: all 0.25s var(--ease-spring); }
 :global(.toast-enter-from), :global(.toast-leave-to) { opacity: 0; transform: translateX(-50%) translateY(12px); }
+
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  opacity: 0.92;
+  z-index: 20;
+  gap: 16px;
+}
+.scan-overlay p {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.scan-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: scan-spin 0.8s linear infinite;
+}
+@keyframes scan-spin {
+  to { transform: rotate(360deg); }
+}
 </style>

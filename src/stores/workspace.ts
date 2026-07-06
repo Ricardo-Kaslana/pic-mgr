@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import type { Workspace, ScanProgress } from '../types'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
@@ -35,9 +36,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return progress
   }
 
+  async function startScan(id: number) {
+    scanProgress.value = null
+
+    const unlisten = await listen<ScanProgress>('scan-progress', (event) => {
+      scanProgress.value = event.payload
+    })
+
+    try {
+      const progress = await invoke<ScanProgress>('scan_workspace', { id })
+      scanProgress.value = progress
+      return progress
+    } finally {
+      unlisten()
+    }
+  }
+
   function select(id: number) {
     currentId.value = id
   }
 
-  return { workspaces, currentId, current, scanProgress, fetchAll, create, remove, scan, select }
+  return { workspaces, currentId, current, scanProgress, fetchAll, create, remove, scan, startScan, select }
 })

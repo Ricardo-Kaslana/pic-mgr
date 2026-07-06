@@ -19,8 +19,8 @@ onMounted(() => store.fetchAll())
 async function handleCreate(name: string, path: string) {
   const ws = await store.create(name, path)
   showDialog.value = false
-  await store.scan(ws.id)
   router.push(`/workspace/${ws.id}`)
+  store.startScan(ws.id)
 }
 
 function handleSelect(id: number) {

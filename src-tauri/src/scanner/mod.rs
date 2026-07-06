@@ -1,8 +1,6 @@
 pub mod thumbnail;
 
-use sha2::{Sha256, Digest};
 use std::fs;
-use std::io::Read;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 use crate::models::ImageRecord;
@@ -16,23 +14,6 @@ fn is_image_file(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| SUPPORTED_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
         .unwrap_or(false)
-}
-
-/// Streaming SHA-256 hash — reads file in 8KB chunks.
-fn compute_file_hash(path: &Path) -> Option<String> {
-    let file = fs::File::open(path).ok()?;
-    let mut hasher = Sha256::new();
-    let mut buf = [0u8; 8192];
-    let mut reader = std::io::BufReader::new(file);
-    loop {
-        let n = match reader.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(_) => return None,
-        };
-        hasher.update(&buf[..n]);
-    }
-    Some(format!("{:x}", hasher.finalize()))
 }
 
 fn file_modified_at(metadata: &fs::Metadata) -> Option<String> {
@@ -133,7 +114,9 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
                 .map(|e| e.to_lowercase());
             let metadata = fs::metadata(&path).ok();
             let file_size = metadata.as_ref().map(|m| m.len() as i64);
-            let file_hash = compute_file_hash(&path);
+            // SHA-256 hashing is deferred to avoid blocking the scan loop;
+            // find_duplicates computes hashes on-demand when needed.
+            let file_hash = None;
             let created_at = metadata.as_ref().and_then(file_modified_at);
             let file_created_at = metadata.as_ref().and_then(file_created_at);
             let now = chrono_lite_now();
