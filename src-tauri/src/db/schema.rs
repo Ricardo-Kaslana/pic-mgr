@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS images (
     notes           TEXT DEFAULT '',
     rating          INTEGER DEFAULT 0 CHECK(rating >= 0 AND rating <= 5),
     created_at      TEXT,
+    file_created_at TEXT,
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
     indexed_at      TEXT NOT NULL DEFAULT (datetime('now')),
     last_viewed_at  TEXT,
@@ -51,11 +52,14 @@ CREATE TRIGGER IF NOT EXISTS images_fts_insert AFTER INSERT ON images BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS images_fts_delete AFTER DELETE ON images BEGIN
-    INSERT INTO images_fts(images_fts, rowid, file_name, notes) VALUES('delete', old.id, old.file_name, old.notes);
+    INSERT INTO images_fts(images_fts, rowid) VALUES('delete', old.id);
 END;
 
 CREATE TRIGGER IF NOT EXISTS images_fts_update AFTER UPDATE ON images BEGIN
-    INSERT INTO images_fts(images_fts, rowid, file_name, notes) VALUES('delete', old.id, old.file_name, old.notes);
+    INSERT INTO images_fts(images_fts, rowid) VALUES('delete', old.id);
     INSERT INTO images_fts(rowid, file_name, notes) VALUES (new.id, new.file_name, new.notes);
 END;
+
+CREATE INDEX IF NOT EXISTS idx_images_hash ON images(file_hash);
+CREATE INDEX IF NOT EXISTS idx_image_tags_tag_id ON image_tags(tag_id);
 ";

@@ -1,5 +1,39 @@
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection, Result, Row};
 use crate::models::*;
+
+// ── Row mapping helpers ──
+
+pub(crate) fn row_to_image_record(row: &Row) -> Result<ImageRecord> {
+    Ok(ImageRecord {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        relative_path: row.get(2)?,
+        file_name: row.get(3)?,
+        file_size: row.get(4)?,
+        file_hash: row.get(5)?,
+        width: row.get(6)?,
+        height: row.get(7)?,
+        format: row.get(8)?,
+        thumbnail_path: row.get(9)?,
+        notes: row.get(10)?,
+        rating: row.get(11)?,
+        created_at: row.get(12)?,
+        file_created_at: row.get(13)?,
+        updated_at: row.get(14)?,
+        indexed_at: row.get(15)?,
+        last_viewed_at: row.get(16)?,
+    })
+}
+
+fn row_to_workspace(row: &Row) -> Result<Workspace> {
+    Ok(Workspace {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        path: row.get(2)?,
+        created_at: row.get(3)?,
+        updated_at: row.get(4)?,
+    })
+}
 
 // ── Workspace ──
 
@@ -22,20 +56,28 @@ pub fn list_workspaces(conn: &Connection) -> Result<Vec<Workspace>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, path, created_at, updated_at FROM workspaces ORDER BY updated_at DESC"
     )?;
-    let rows = stmt.query_map([], |row| {
-        Ok(Workspace {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            path: row.get(2)?,
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
-        })
-    })?;
+    let rows = stmt.query_map([], row_to_workspace)?;
     rows.collect()
 }
 
 pub fn delete_workspace(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute("DELETE FROM workspaces WHERE id = ?1", params![id])?;
+    // Manual cascade: delete image_tags → images → workspace in a single transaction.
+    // Avoids relying on ON DELETE CASCADE which can trigger complex nested operations
+    // (FTS triggers + image_tags cascade) that may lead to SQLITE_CORRUPT on large datasets.
+    conn.execute_batch("BEGIN")?;
+    conn.execute(
+        "DELETE FROM image_tags WHERE image_id IN (SELECT id FROM images WHERE workspace_id = ?1)",
+        params![id],
+    )?;
+    conn.execute(
+        "DELETE FROM images WHERE workspace_id = ?1",
+        params![id],
+    )?;
+    conn.execute(
+        "DELETE FROM workspaces WHERE id = ?1",
+        params![id],
+    )?;
+    conn.execute_batch("COMMIT")?;
     Ok(())
 }
 
@@ -43,15 +85,7 @@ pub fn get_workspace(conn: &Connection, id: i64) -> Result<Option<Workspace>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, path, created_at, updated_at FROM workspaces WHERE id = ?1"
     )?;
-    let mut rows = stmt.query_map(params![id], |row| {
-        Ok(Workspace {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            path: row.get(2)?,
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
-        })
-    })?;
+    let mut rows = stmt.query_map(params![id], row_to_workspace)?;
     Ok(rows.next().transpose()?)
 }
 
@@ -59,16 +93,16 @@ pub fn get_workspace(conn: &Connection, id: i64) -> Result<Option<Workspace>> {
 
 pub fn insert_image(conn: &Connection, image: &ImageRecord) -> Result<i64> {
     conn.execute(
-        "INSERT INTO images (workspace_id, relative_path, file_name, file_size, file_hash, width, height, format, thumbnail_path, notes, rating, created_at, updated_at, indexed_at, last_viewed_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+        "INSERT INTO images (workspace_id, relative_path, file_name, file_size, file_hash, width, height, format, thumbnail_path, notes, rating, created_at, file_created_at, updated_at, indexed_at, last_viewed_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
          ON CONFLICT(workspace_id, relative_path) DO UPDATE SET
          file_size=excluded.file_size, file_hash=excluded.file_hash, width=excluded.width,
          height=excluded.height, format=excluded.format, updated_at=excluded.updated_at",
         params![
             image.workspace_id, image.relative_path, image.file_name, image.file_size,
             image.file_hash, image.width, image.height, image.format, image.thumbnail_path,
-            image.notes, image.rating, image.created_at, image.updated_at, image.indexed_at,
-            image.last_viewed_at,
+            image.notes, image.rating, image.created_at, image.file_created_at,
+            image.updated_at, image.indexed_at, image.last_viewed_at,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -84,7 +118,7 @@ pub fn get_images(
     let mut sql = String::from(
         "SELECT i.id, i.workspace_id, i.relative_path, i.file_name, i.file_size, i.file_hash,
                 i.width, i.height, i.format, i.thumbnail_path, i.notes, i.rating,
-                i.created_at, i.updated_at, i.indexed_at, i.last_viewed_at
+                i.created_at, i.file_created_at, i.updated_at, i.indexed_at, i.last_viewed_at
          FROM images i WHERE i.workspace_id = ?1"
     );
     let mut param_idx = 2;
@@ -135,6 +169,9 @@ pub fn get_images(
         Some("date") => "i.created_at",
         Some("size") => "i.file_size",
         Some("rating") => "i.rating",
+        Some("indexed_at") => "i.indexed_at",
+        Some("updated_at") => "i.updated_at",
+        Some("file_created_at") => "i.file_created_at",
         _ => "i.indexed_at",
     };
     let sort_dir = match filters.sort_dir.as_deref() {
@@ -146,7 +183,7 @@ pub fn get_images(
     let count_sql = sql.replacen(
         "SELECT i.id, i.workspace_id, i.relative_path, i.file_name, i.file_size, i.file_hash,
                 i.width, i.height, i.format, i.thumbnail_path, i.notes, i.rating,
-                i.created_at, i.updated_at, i.indexed_at, i.last_viewed_at",
+                i.created_at, i.file_created_at, i.updated_at, i.indexed_at, i.last_viewed_at",
         "SELECT COUNT(*)",
         1,
     );
@@ -162,26 +199,7 @@ pub fn get_images(
 
     let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(params_refs.as_slice(), |row| {
-        Ok(ImageRecord {
-            id: row.get(0)?,
-            workspace_id: row.get(1)?,
-            relative_path: row.get(2)?,
-            file_name: row.get(3)?,
-            file_size: row.get(4)?,
-            file_hash: row.get(5)?,
-            width: row.get(6)?,
-            height: row.get(7)?,
-            format: row.get(8)?,
-            thumbnail_path: row.get(9)?,
-            notes: row.get(10)?,
-            rating: row.get(11)?,
-            created_at: row.get(12)?,
-            updated_at: row.get(13)?,
-            indexed_at: row.get(14)?,
-            last_viewed_at: row.get(15)?,
-        })
-    })?;
+    let rows = stmt.query_map(params_refs.as_slice(), row_to_image_record)?;
     let images: Result<Vec<ImageRecord>> = rows.collect();
 
     Ok(ImagePage {
@@ -196,30 +214,18 @@ pub fn get_image_detail(conn: &Connection, image_id: i64) -> Result<Option<Image
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, relative_path, file_name, file_size, file_hash,
                 width, height, format, thumbnail_path, notes, rating,
-                created_at, updated_at, indexed_at, last_viewed_at
+                created_at, file_created_at, updated_at, indexed_at, last_viewed_at
          FROM images WHERE id = ?1"
     )?;
-    let mut rows = stmt.query_map(params![image_id], |row| {
-        Ok(ImageRecord {
-            id: row.get(0)?,
-            workspace_id: row.get(1)?,
-            relative_path: row.get(2)?,
-            file_name: row.get(3)?,
-            file_size: row.get(4)?,
-            file_hash: row.get(5)?,
-            width: row.get(6)?,
-            height: row.get(7)?,
-            format: row.get(8)?,
-            thumbnail_path: row.get(9)?,
-            notes: row.get(10)?,
-            rating: row.get(11)?,
-            created_at: row.get(12)?,
-            updated_at: row.get(13)?,
-            indexed_at: row.get(14)?,
-            last_viewed_at: row.get(15)?,
-        })
-    })?;
+    let mut rows = stmt.query_map(params![image_id], row_to_image_record)?;
     Ok(rows.next().transpose()?)
+}
+
+/// Sanitize user input for FTS5 MATCH — wrap in double quotes, escape internal quotes.
+/// This treats the input as a literal phrase search, preventing syntax errors or query injection.
+fn sanitize_fts_query(input: &str) -> String {
+    let escaped = input.replace('"', "\"\"");
+    format!("\"{}\"", escaped)
 }
 
 pub fn search_images(
@@ -229,9 +235,11 @@ pub fn search_images(
     page: i32,
     page_size: i32,
 ) -> Result<ImagePage> {
+    let fts_query = sanitize_fts_query(query);
+
     let total: i64 = conn.query_row(
         "SELECT COUNT(*) FROM images_fts WHERE images_fts MATCH ?1 AND rowid IN (SELECT id FROM images WHERE workspace_id = ?2)",
-        params![query, workspace_id],
+        params![fts_query, workspace_id],
         |row| row.get(0),
     )?;
 
@@ -239,23 +247,14 @@ pub fn search_images(
     let mut stmt = conn.prepare(
         "SELECT i.id, i.workspace_id, i.relative_path, i.file_name, i.file_size, i.file_hash,
                 i.width, i.height, i.format, i.thumbnail_path, i.notes, i.rating,
-                i.created_at, i.updated_at, i.indexed_at, i.last_viewed_at
+                i.created_at, i.file_created_at, i.updated_at, i.indexed_at, i.last_viewed_at
          FROM images i
          INNER JOIN images_fts fts ON i.id = fts.rowid
          WHERE images_fts MATCH ?1 AND i.workspace_id = ?2
          ORDER BY rank
          LIMIT ?3 OFFSET ?4"
     )?;
-    let rows = stmt.query_map(params![query, workspace_id, page_size, offset], |row| {
-        Ok(ImageRecord {
-            id: row.get(0)?, workspace_id: row.get(1)?, relative_path: row.get(2)?,
-            file_name: row.get(3)?, file_size: row.get(4)?, file_hash: row.get(5)?,
-            width: row.get(6)?, height: row.get(7)?, format: row.get(8)?,
-            thumbnail_path: row.get(9)?, notes: row.get(10)?, rating: row.get(11)?,
-            created_at: row.get(12)?, updated_at: row.get(13)?, indexed_at: row.get(14)?,
-            last_viewed_at: row.get(15)?,
-        })
-    })?;
+    let rows = stmt.query_map(params![fts_query, workspace_id, page_size, offset], row_to_image_record)?;
     let images: Result<Vec<ImageRecord>> = rows.collect();
 
     Ok(ImagePage {
@@ -290,40 +289,49 @@ pub fn batch_update_tags(
     tag_ids: &[i64],
     action: &str,
 ) -> Result<()> {
-    match action {
-        "add" => {
-            for &img_id in image_ids {
-                for &tag_id in tag_ids {
-                    conn.execute(
-                        "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?1, ?2)",
-                        params![img_id, tag_id],
-                    )?;
+    conn.execute_batch("BEGIN")?;
+    let result = (|| -> Result<()> {
+        match action {
+            "add" => {
+                for &img_id in image_ids {
+                    for &tag_id in tag_ids {
+                        conn.execute(
+                            "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?1, ?2)",
+                            params![img_id, tag_id],
+                        )?;
+                    }
                 }
             }
-        }
-        "remove" => {
-            for &img_id in image_ids {
-                for &tag_id in tag_ids {
-                    conn.execute(
-                        "DELETE FROM image_tags WHERE image_id = ?1 AND tag_id = ?2",
-                        params![img_id, tag_id],
-                    )?;
+            "remove" => {
+                for &img_id in image_ids {
+                    for &tag_id in tag_ids {
+                        conn.execute(
+                            "DELETE FROM image_tags WHERE image_id = ?1 AND tag_id = ?2",
+                            params![img_id, tag_id],
+                        )?;
+                    }
                 }
             }
-        }
-        "set" => {
-            for &img_id in image_ids {
-                conn.execute("DELETE FROM image_tags WHERE image_id = ?1", params![img_id])?;
-                for &tag_id in tag_ids {
-                    conn.execute(
-                        "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?1, ?2)",
-                        params![img_id, tag_id],
-                    )?;
+            "set" => {
+                for &img_id in image_ids {
+                    conn.execute("DELETE FROM image_tags WHERE image_id = ?1", params![img_id])?;
+                    for &tag_id in tag_ids {
+                        conn.execute(
+                            "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?1, ?2)",
+                            params![img_id, tag_id],
+                        )?;
+                    }
                 }
             }
+            _ => {}
         }
-        _ => {}
+        Ok(())
+    })();
+    if result.is_err() {
+        conn.execute_batch("ROLLBACK").ok();
+        return result;
     }
+    conn.execute_batch("COMMIT")?;
     Ok(())
 }
 
