@@ -92,6 +92,7 @@ export default {
     openExplorer: '在资源管理器中打开',
     copyPath: '复制文件路径',
     moveFile: '移动文件',
+    moveToWorkspace: '移动到工作区...',
     removeFromWorkspace: '从工作区移除',
     confirmRemove: '从工作区移除此图片？不会删除原始文件。',
     moveToTrash: '删除文件（回收站）',
@@ -138,5 +139,10 @@ export default {
   },
   lightbox: {
     loadFailed: '无法加载图片',
+  },
+  moveToWorkspace: {
+    title: '选择目标工作区',
+    confirm: '移动',
+    currentWorkspace: '当前工作区',
   },
 }

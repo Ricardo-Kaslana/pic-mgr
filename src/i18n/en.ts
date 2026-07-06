@@ -94,6 +94,7 @@ export default {
     openExplorer: 'Open in Explorer',
     copyPath: 'Copy File Path',
     moveFile: 'Move File',
+    moveToWorkspace: 'Move to workspace...',
     removeFromWorkspace: 'Remove from Workspace',
     confirmRemove: 'Remove this image from workspace? Original file will not be deleted.',
     moveToTrash: 'Delete (Recycle Bin)',
@@ -140,5 +141,10 @@ export default {
   },
   lightbox: {
     loadFailed: 'Failed to load image',
+  },
+  moveToWorkspace: {
+    title: 'Select target workspace',
+    confirm: 'Move',
+    currentWorkspace: 'Current workspace',
   },
 }
