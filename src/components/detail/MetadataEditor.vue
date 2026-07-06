@@ -55,7 +55,7 @@ const suggestions = computed(() => {
     .filter(t => !query || t.name.toLowerCase().includes(query))
 })
 
-async function addTagById(tagId: number, tagName: string) {
+async function addTagById(tagId: number, _tagName: string) {
   await invoke('batch_update_tags', {
     imageIds: [props.detail.id],
     tagIds: [tagId],
