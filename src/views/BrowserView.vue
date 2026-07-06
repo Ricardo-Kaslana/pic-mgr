@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useWorkspaceStore } from '../stores/workspace'
 import { useImageStore } from '../stores/images'
@@ -57,27 +58,55 @@ onMounted(async () => {
   try {
     imageStore.reset()
     selection.clear()
-    // Fetch all data in parallel — all 3 are independent
     workspaceStore.select(workspaceId.value)
+
+    // Load workspace and images FIRST — these block the initial render
     await Promise.all([
       workspaceStore.fetchAll(),
       imageStore.fetchImages(workspaceId.value),
-      tagStore.fetchTags(workspaceId.value),
     ])
 
-    // If workspace is empty, a scan may be in progress — show overlay
-    if (imageStore.images.length === 0 && workspaceStore.currentId === workspaceId.value) {
-      scanning.value = true
-    }
+    // Defer tag loading: tags are only used in the sidebar filter, which is secondary UI.
+    // Loading them here keeps the sidebar responsive but doesn't delay image rendering.
+    tagStore.fetchTags(workspaceId.value)
 
     unlistenScan = await listen<ScanProgress>('scan-progress', (event) => {
       scanProgress.value = event.payload
-      if (event.payload.finished) {
+      if (!event.payload.finished) {
+        // Only show the scan overlay when we've confirmed a scan is actually running.
+        // This avoids getting stuck with a permanently visible overlay when
+        // scan-progress events were emitted before the listener was registered,
+        // or when the workspace is simply empty with no scan in progress.
+        scanning.value = true
+      } else {
         scanning.value = false
         imageStore.fetchImages(workspaceId.value)
         tagStore.fetchTags(workspaceId.value)
+        // Pre-generate thumbnails in background for all images in this workspace
+        // so the user doesn't have to wait for on-demand generation during first view.
+        invoke('generate_thumbnails_batch', {
+          imageIds: imageStore.images.map(i => i.id),
+        }).catch((e: any) =>
+          console.warn('[BrowserView] background thumbnail generation failed:', e)
+        )
       }
     })
+
+    // Race condition catch-up: the scan may have finished between our initial
+    // fetchImages and listen() — in that window the finished event was emitted
+    // and missed, so the listener's finished branch (which loads images) never ran.
+    // Refresh images now to catch up.
+    if (imageStore.images.length === 0) {
+      await imageStore.fetchImages(workspaceId.value)
+      if (imageStore.images.length > 0) {
+        tagStore.fetchTags(workspaceId.value)
+        invoke('generate_thumbnails_batch', {
+          imageIds: imageStore.images.map(i => i.id),
+        }).catch((e: any) =>
+          console.warn('[BrowserView] catch-up thumbnail generation failed:', e)
+        )
+      }
+    }
   } catch (e) {
     console.error('[BrowserView] init failed:', e)
   }
