@@ -26,8 +26,10 @@ No test suite exists. There is no linter configured beyond vue-tsc.
 - `AppState` is injected via `app.manage()` and accessed in commands via `State<AppState>`. The DB connection is `Mutex<Connection>`.
 - Scanner uses only filesystem metadata + SHA-256 hashes — do NOT use the `image` crate to read dimensions during scan (causes stack overflow on some files).
 - Thumbnail generation wraps `image::open()` in `catch_unwind` because `image-rs` can panic on malformed files.
+- Thumbnail format: JPEG quality 80 (was WebP lossless). Cache files stored as `{id}.jpg`.
 - Thumbnail format detection uses `with_guessed_format()` (file header magic bytes), not file extension.
 - LRU thumbnail cache holds up to 500 blob URLs; scrolling out of viewport triggers revoke.
+- Thumbnail loading concurrency: max 4 parallel IPC calls to prevent backend overload.
 - Append-mode pagination (`append=true`): new pages are added to existing data, never replace it.
 - File dates: `created_at` = filesystem mtime; `file_created_at` = birth time; `indexed_at` = time added to DB.
 - Delete uses the `trash` crate (system recycle bin), not `fs::remove_file`.

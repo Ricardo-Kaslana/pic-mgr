@@ -15,7 +15,7 @@ db/
   queries.rs     — 查询层 (CRUD, 分页, FTS 搜索, 批量标签)
 scanner/
   mod.rs         — 目录递归扫描，SHA-256 哈希，文件元数据提取 (mtime + birth time)
-  thumbnail.rs   — WebP 缩略图生成 (image crate)
+  thumbnail.rs   — JPEG 缩略图生成 (image crate, quality 80)
 commands/
   workspace.rs   — create_workspace, list_workspaces, delete_workspace
   scan.rs        — scan_workspace, rescan_workspace

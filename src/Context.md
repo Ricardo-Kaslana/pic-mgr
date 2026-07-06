@@ -53,7 +53,7 @@ components/
 - **Tauri invoke** — 所有后端调用通过 `invoke<ReturnType>('command_name', { params })`
 - **响应式缓存** — thumbnail store 用 LRU 缓存 (MAX 500)，grid 用 `reactive<Map>` 触发重渲染
 - **内存管理** — 滚动离开可视区后 revoke blob URL，LRU 淘汰最久未访问的缩略图
-- **虚拟滚动** — 自适应网格布局，按行计算可见区域，动态加载缩略图
+- **虚拟滚动** — 自适应网格布局，按行计算可见区域，动态加载缩略图（max 4 并发 IPC 调用）
 - **分页追加** — `fetchImages(id, append=true)` 翻页时追加而非替换
 - **主题** — CSS 变量 + `[data-theme]` 属性切换
 - **i18n** — vue-i18n，语言切换同步到 localStorage
