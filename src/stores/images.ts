@@ -7,7 +7,7 @@ export const useImageStore = defineStore('images', () => {
   const images = ref<ImageRecord[]>([])
   const total = ref(0)
   const page = ref(1)
-  const pageSize = ref(100)
+  const pageSize = ref(50)
   const loading = ref(false)
   const selectedDetail = ref<ImageDetail | null>(null)
   const lastSelectedId = ref<number | null>(null)

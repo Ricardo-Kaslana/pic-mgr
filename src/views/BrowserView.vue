@@ -57,10 +57,13 @@ onMounted(async () => {
   try {
     imageStore.reset()
     selection.clear()
-    await workspaceStore.fetchAll()
+    // Fetch all data in parallel — all 3 are independent
     workspaceStore.select(workspaceId.value)
-    await imageStore.fetchImages(workspaceId.value)
-    await tagStore.fetchTags(workspaceId.value)
+    await Promise.all([
+      workspaceStore.fetchAll(),
+      imageStore.fetchImages(workspaceId.value),
+      tagStore.fetchTags(workspaceId.value),
+    ])
 
     // If workspace is empty, a scan may be in progress — show overlay
     if (imageStore.images.length === 0 && workspaceStore.currentId === workspaceId.value) {
@@ -148,20 +151,18 @@ onUnmounted(() => {
           @show-dedup="showDedup = true"
           @locate-last="locateImage"
         />
-        <div class="grid-wrapper" style="position: relative; flex: 1; overflow: hidden;">
-          <ThumbnailGrid
-            ref="gridRef"
-            :workspace-id="workspaceId"
-            :select-mode="selectMode"
-            @select-detail="(id: number) => imageStore.fetchDetail(id)"
-            @refresh="async () => { imageStore.setPage(1); await imageStore.fetchImages(workspaceId); await tagStore.fetchTags(workspaceId) }"
-            @view-fullscreen="openFullscreen"
-            @show-toast="showToast"
-          />
-          <div v-if="scanning" class="scan-overlay">
-            <div class="scan-spinner"></div>
-            <p>{{ t('browser.scanning', { processed: scanProgress?.processed ?? 0, total: scanProgress?.total ?? 0 }) }}</p>
-          </div>
+        <ThumbnailGrid
+          ref="gridRef"
+          :workspace-id="workspaceId"
+          :select-mode="selectMode"
+          @select-detail="(id: number) => imageStore.fetchDetail(id)"
+          @refresh="async () => { imageStore.setPage(1); await imageStore.fetchImages(workspaceId); await tagStore.fetchTags(workspaceId) }"
+          @view-fullscreen="openFullscreen"
+          @show-toast="showToast"
+        />
+        <div v-if="scanning" class="scan-overlay">
+          <div class="scan-spinner"></div>
+          <p>{{ t('browser.scanning', { processed: scanProgress?.processed ?? 0, total: scanProgress?.total ?? 0 }) }}</p>
         </div>
       </div>
       <button
@@ -280,6 +281,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 :global(.toast) {
