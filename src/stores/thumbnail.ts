@@ -38,7 +38,7 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     try {
       const bytes = await invoke<number[]>('get_thumbnail', { imageId })
       const uint8 = new Uint8Array(bytes)
-      const blob = new Blob([uint8], { type: 'image/webp' })
+      const blob = new Blob([uint8], { type: 'image/jpeg' })
       const url = URL.createObjectURL(blob)
 
       evictOldest()
