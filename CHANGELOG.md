@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.3.1] — 2026-07-06
+
+### Fixed
+
+- **Workspace deletion silently fails**: Two root causes fixed:
+  - FTS5 triggers verified content on `'delete'` command, causing `SQLITE_ERROR` on cascade delete when content mismatched (empty string vs NULL, etc.). Changed to rowid-only delete (`INSERT INTO images_fts(images_fts, rowid) VALUES('delete', old.id)`) in both `images_fts_delete` and `images_fts_update` triggers. Migration drops+recreates old triggers on startup.
+  - `ON DELETE CASCADE` chain (workspace → images → image_tags + FTS triggers) could trigger `SQLITE_CORRUPT` on large datasets. Rewrote `delete_workspace` to manually handle the cascade: delete `image_tags` → delete `images` → delete `workspace`, all in a single explicit `BEGIN`/`COMMIT` transaction.
+- **WorkspaceHome delete error handling**: Added `try/catch` with dismissible error banner (i18n key `workspace.deleteFailed`) so failures are visible instead of silent.
+
+### Changed
+
+- `.gitignore`: Added patterns for `.claude/`, `.codegraph/`, `.omo/`, OS files, env files.
+
+## [0.3.0] — 2026-06-12
+
+### Added
+
+- **Sort controls**: Dropdown in grid header to sort by filename, indexed time, modified time, or created time; click toggles asc/desc; backend `sort_col` match expanded in `queries.rs`
+- **Quick locate**: Auto-scroll grid to selected image when detail panel opens (nextTick + 80ms delay for layout reflow); accent glow border on active cell; manual locate button (⌖) in detail header
+- **Panel collapse/expand**: Sidebar and detail panels collapse to 0 width with 28px circular toggle buttons floating at the panel edge; buttons hidden by default, revealed on hover with accent glow; SVG chevron icons; smooth CSS transitions; detail auto-expands when an image is selected
+
+### Changed
+
+- **Button layout**: Header toolbar restructured — header-left holds count + sort, header-right holds action buttons; select mode uses btn-group dividers between groups; emojis removed from toolbar buttons
+- **Select all toggle**: Single button toggles between select-all and deselect-all (was: two separate buttons); Ctrl+A shortcut uses same toggle
+- **Workspace rescan feedback**: Spinning refresh icon during scan, green checkmark with pop-in animation for 2s on completion; button stays visible during operation; emoji replaced with SVG icons for rescan and delete
+
+### Fixed
+
+- **Text alignment**: Context menu emoji prefixes wrapped in fixed-width `.ctx-icon` span (22px) so menu item text aligns vertically; nav sidebar `.nav-icon` given fixed 20px width; theme toggle emoji also fixed-width — all sidebar text labels now start at the same x position
+
+### Optimized
+
+- **Scan inserts wrapped in transaction**: 10-50x faster scanning by avoiding per-row fsync
+- **Batch tag updates wrapped in transaction**: 10x+ faster bulk tag operations
+- **Database indexes**: Added `idx_images_hash` (duplicate detection) and `idx_image_tags_tag_id` (tag joins)
+- **Reduced syscalls**: Scanner `fs::metadata` calls reduced from 3 to 1 per file; thumbnail generation reads file once instead of 3 times
+- **Batch export queries**: Export metadata uses 2 batch queries instead of N+1 individual queries
+- **Thumbnail cache**: `shallowRef` replaces `ref<Map>` to avoid O(n) copy on every load/eviction
+- **Scroll throttle**: Thumbnail loading watcher throttled to 80ms to prevent per-frame firing
+- **ResizeObserver leak fix**: Observer properly disconnected on component unmount
+- **Type consolidation**: `ImageDetail extends ImageRecord` eliminates 16 duplicated fields
+- **Row mapping helper**: `row_to_image_record` / `row_to_workspace` extracted, eliminating 6 copies of 17-field mapping
+- **Unified delete logic**: `delete_image` and `move_images` now call `delete_db_records`; removed redundant manual FTS cleanup (triggers handle it)
+- **FTS5 query sanitization**: User search input wrapped in double quotes with escaped special characters to prevent syntax errors
+- **BrowserView decomposition**: 560→269 lines; extracted `GridToolbar` component and `useToast` composable
+- **Complete i18n**: 48 hardcoded Chinese strings replaced with `t()` calls across 10 components; 21 new i18n keys added
+- **ARIA accessibility**: Dropdown menus, context menus, star rating, lightbox dialog, and toast notifications have proper ARIA roles and attributes
+- **Dead code removed**: `VirtualScroller.vue`, `ThumbnailCard.vue` (never imported); `walkdir`, `tokio` dependencies (unused)
+- **Version strings unified**: All version references set to 0.3.0
+
+### Backend
+
+- `queries.rs`: Added `indexed_at`, `updated_at`, `file_created_at` to the `sort_col` match (previously only `name`, `date`, `size`, `rating`)
+- `thumbnail.rs`: Replaced deprecated `image::io::Reader` with `image::ImageReader`
+- `Cargo.toml`: Removed unused `walkdir` and `tokio` direct dependencies
+
 ## [0.2.0] — 2026-06-07
 
 ### Added
@@ -45,6 +102,34 @@
 - **Rust borrow lifetime**: `stmt.query_map()` result bound to local variable to avoid premature drop.
 - **find_duplicates panic protection**: Wrapped in `catch_unwind` to prevent app crash.
 
+### Added (2026-06-09)
+
+- **File date tracking**: ImageInfo shows 3 dates — file creation time (`metadata.created()`), file modification time (`metadata.modified()`), and indexed time
+- **Copy filename button**: One-click copy in detail panel with ✓ feedback
+- **DB migration**: `ALTER TABLE ADD COLUMN` on startup for schema evolution
+
+### Added (2026-06-11)
+
+- **Batch delete**: Move images to system Recycle Bin via `trash` crate, supports single and multi-select
+- **Batch move**: Move images to a chosen folder, auto-handles filename conflicts with `_1`/`_2` suffixes
+- **Delete context menu**: Right-click "删除文件（回收站）" option in thumbnail grid
+- **Selection toolbar**: Delete (🗑️) and Move (📁) buttons in select mode toolbar
+- **Backend commands**: `trash_images`, `move_images`, `read_file_bytes`
+- **i18n**: Full Chinese/English translations for all new UI elements
+
+### Fixed
+
+- **Cross-drive move failure**: `std::fs::rename` on Windows can't move across drives (os error 17). Fixed with copy+delete fallback.
+- **Move losing DB records**: Old records now updated in-place when destination is within workspace
+- **Page reset after operation**: `setPage(1)` called before refresh after delete/move to avoid empty grid
+
+### Added (2026-06-11)
+
+- **Lightbox fullscreen viewer**: Double-click thumbnail to view full-size original image; arrow keys for prev/next, Escape to close
+- **Context menu move**: Right-click "📁 移动文件" option with folder picker dialog
+- **Context menu refresh**: All context menu operations (remove/trash/move) now emit unified refresh via BrowserView
+- **UI design overhaul**: Digital Darkroom aesthetic — layered background depths, refined CSS variable system, glass-morphism overlays, unified button system (6 semantic variants + 3 sizes + icon/pill), SVG sidebar icons, card hover shadows, animated context menus, spring-eased toasts
+
 ## [0.1.0] — 2026-06-07
 
 ### Added
@@ -77,13 +162,3 @@
 - 修复 WebView2 GPU 加速导致的崩溃（`--disable-gpu`）
 - 修复 `image::image_dimensions` 栈缓冲区溢出（扫描阶段移除尺寸读取）
 - 修复缩略图编码尺寸不匹配（使用实际 thumbnail 尺寸）
-- 修复分页时图片列表被替换而非追加
-- 修复虚拟滚动缩略图不可见（使用 reactive Map 触发 Vue 重渲染）
-- 修复扫描器使用流式 SHA-256 避免大文件内存问题
-- 修复缩略图生成 panic 未捕获（添加 `catch_unwind`）
-
-### Changed
-
-- 扫描器从 `WalkDir` 改为 `std::fs::read_dir` 递归遍历
-- 扫描器不再依赖 `image` crate，仅在缩略图生成时使用
-- `scan_workspace` 从 async 改为 sync，数据库锁按 50 条一批释放

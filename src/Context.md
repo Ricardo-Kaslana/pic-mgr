@@ -12,7 +12,7 @@ App.vue              — AppLayout 包裹 router-view
 router/index.ts      — 3 个路由: /, /workspace/:id, /settings
 i18n/                — vue-i18n 国际化 (zh-CN.ts, en.ts, index.ts)
 types/index.ts       — TypeScript 接口定义
-style.css            — 全局样式 + CSS 变量 (暗色/亮色主题)
+style.css            — 全局样式 + CSS 变量 + 统一按钮系统 (暗色/亮色主题)
 
 stores/
   workspace.ts       — 工作区 CRUD、扫描
@@ -24,7 +24,7 @@ stores/
 
 views/
   WorkspaceHome.vue  — 工作区列表页
-  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView)
+  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠)
   DedupView.vue      — 重复图片检测 (作为 BrowserView 子组件)
   SettingsPage.vue   — 设置页
 
@@ -42,9 +42,10 @@ components/
   detail/
     ImagePreview.vue         — 图片预览区
     MetadataEditor.vue       — 评分/标签/备注编辑
-    ImageInfo.vue            — 只读文件信息
+    ImageInfo.vue            — 只读文件信息（3 个日期 + 复制文件名）
   common/
     TagBadge.vue             — 标签胶囊组件
+    LightboxViewer.vue       — 全屏大图查看（双击触发，← → 翻页，Escape 关闭）
 ```
 
 ## Key patterns
@@ -56,6 +57,7 @@ components/
 - **分页追加** — `fetchImages(id, append=true)` 翻页时追加而非替换
 - **主题** — CSS 变量 + `[data-theme]` 属性切换
 - **i18n** — vue-i18n，语言切换同步到 localStorage
-- **右键菜单** — Teleport 到 body 的 context menu，支持打开/复制/移除
+- **右键菜单** — Teleport 到 body 的 context menu，支持打开/复制/移动/移除/删除
 - **导出** — JSON/CSV 格式导出，通过 Blob + URL.createObjectURL 下载
-- **交互模式** — 单击查看图片详情；"选择"按钮进入选择模式（点击选中，全选/取消全选），Escape 退出
+- **交互模式** — 单击查看详情；双击查看大图（全屏原图）；"选择"按钮进入选择模式（点击选中，全选/取消全选/删除/移动/导出），Escape 退出
+- **工作区删除错误处理** — `WorkspaceHome.vue` 用 `try/catch` 包裹 `store.remove()`，错误通过红色 dismissible banner 显示（i18n key: `workspace.deleteFailed`）
