@@ -142,8 +142,6 @@ export default {
   },
   moveToWorkspace: {
     title: '选择目标工作区',
-    confirm: '移动',
-    currentWorkspace: '当前工作区',
     noWorkspaces: '没有其他可用工作区',
   },
 }
