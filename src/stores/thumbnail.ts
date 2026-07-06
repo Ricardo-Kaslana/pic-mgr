@@ -4,6 +4,11 @@ import { invoke } from '@tauri-apps/api/core'
 
 const MAX_CACHE_SIZE = 500
 
+export interface ThumbnailBatchEntry {
+  image_id: number
+  bytes: number[]
+}
+
 export const useThumbnailStore = defineStore('thumbnail', () => {
   // shallowRef: avoids Vue proxying each Map entry; we mutate in-place and trigger manually
   const cache = shallowRef<Map<number, string>>(new Map())
@@ -27,6 +32,19 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     }
   }
 
+  function bytesToUrl(bytes: number[]): string {
+    const uint8 = new Uint8Array(bytes)
+    const blob = new Blob([uint8], { type: 'image/jpeg' })
+    return URL.createObjectURL(blob)
+  }
+
+  function addToCache(imageId: number, url: string) {
+    evictOldest()
+    cache.value.set(imageId, url)
+    cache.value = new Map(cache.value) // trigger shallowRef update
+    touchAccess(imageId)
+  }
+
   async function load(imageId: number) {
     if (cache.value.has(imageId)) {
       touchAccess(imageId)
@@ -37,14 +55,8 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     loading.value.add(imageId)
     try {
       const bytes = await invoke<number[]>('get_thumbnail', { imageId })
-      const uint8 = new Uint8Array(bytes)
-      const blob = new Blob([uint8], { type: 'image/jpeg' })
-      const url = URL.createObjectURL(blob)
-
-      evictOldest()
-      cache.value.set(imageId, url)
-      cache.value = new Map(cache.value) // trigger shallowRef update
-      touchAccess(imageId)
+      const url = bytesToUrl(bytes)
+      addToCache(imageId, url)
       return url
     } catch {
       return null
@@ -54,12 +66,46 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     }
   }
 
+  /**
+   * Batch-load thumbnails for multiple IDs in a single IPC call.
+   * Returns the set of IDs that were actually loaded (may be fewer than requested
+   * if some are already cached or fail to generate).
+   */
+  async function batchLoad(imageIds: number[]): Promise<Set<number>> {
+    const uncached = imageIds.filter(id =>
+      !cache.value.has(id) && !loading.value.has(id)
+    )
+    if (uncached.length === 0) return new Set()
+
+    // Mark all as loading
+    for (const id of uncached) loading.value.add(id)
+    loading.value = new Set(loading.value)
+
+    try {
+      const entries = await invoke<ThumbnailBatchEntry[]>('get_thumbnails_batch', {
+        imageIds: uncached,
+      })
+      const loaded = new Set<number>()
+      for (const entry of entries) {
+        const url = bytesToUrl(entry.bytes)
+        addToCache(entry.image_id, url)
+        loaded.add(entry.image_id)
+      }
+      return loaded
+    } catch {
+      return new Set()
+    } finally {
+      for (const id of uncached) loading.value.delete(id)
+      loading.value = new Set(loading.value)
+    }
+  }
+
   function revoke(imageId: number) {
     const url = cache.value.get(imageId)
     if (url) {
       URL.revokeObjectURL(url)
       cache.value.delete(imageId)
-      cache.value = new Map(cache.value) // trigger shallowRef update
+      cache.value = new Map(cache.value)
       const idx = accessOrder.value.indexOf(imageId)
       if (idx !== -1) accessOrder.value.splice(idx, 1)
     }
@@ -74,5 +120,5 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
     accessOrder.value = []
   }
 
-  return { cache, loading, load, revoke, clearAll }
+  return { cache, loading, load, batchLoad, revoke, clearAll }
 })

@@ -100,23 +100,58 @@ const visibleItems = computed<VisibleItem[]>(() => {
 // Reactive thumb URL map — separate from store cache for Vue reactivity
 const thumbUrls = reactive<Map<number, string>>(new Map())
 
-// Throttled thumbnail loader — fires at most once per 80ms scroll burst
-// Concurrency limiter: max 4 parallel IPC calls to prevent overwhelming the backend
-const MAX_THUMB_CONCURRENCY = 4
-const inflightThumbs = new Set<number>()
-const thumbQueue: number[] = []
+/**
+ * Priority-based batch thumbnail loading system.
+ *
+ * Design:
+ * 1. On every visibleItems change, we batch-load uncached thumbnails via a single
+ *    `get_thumbnails_batch` IPC call — avoids 30+ individual IPC calls.
+ * 2. The first visible row (above the fold) is prioritized; the rest follow.
+ * 3. A lazy fallback per-item queue handles items added during scroll (when waiting
+ *    for a full batch would feel laggy).
+ * 4. Concurrency limit lifted — the backend batch command is fast because it avoids
+ *    repeated DB lock acquisitions.
+ */
+const BATCH_CHUNK_SIZE = 20
+let pendingBatch: number[] = []
+let batchTimer: ReturnType<typeof setTimeout> | null = null
 
-function processThumbQueue() {
-  while (inflightThumbs.size < MAX_THUMB_CONCURRENCY && thumbQueue.length > 0) {
-    const id = thumbQueue.shift()!
-    if (inflightThumbs.has(id) || thumbUrls.has(id)) continue
-    inflightThumbs.add(id)
+// Per-item fallback queue for items scrolled into view between batch ticks
+const FALLBACK_CONCURRENCY = 2
+const inflightFallback = new Set<number>()
+const fallbackQueue: number[] = []
+
+function processFallbackQueue() {
+  while (inflightFallback.size < FALLBACK_CONCURRENCY && fallbackQueue.length > 0) {
+    const id = fallbackQueue.shift()!
+    if (inflightFallback.has(id) || thumbUrls.has(id)) continue
+    inflightFallback.add(id)
     thumbStore.load(id).then(url => {
       if (url) thumbUrls.set(id, url)
     }).finally(() => {
-      inflightThumbs.delete(id)
-      processThumbQueue()
+      inflightFallback.delete(id)
+      processFallbackQueue()
     })
+  }
+}
+
+async function flushBatch() {
+  if (pendingBatch.length === 0) return
+  const batch = pendingBatch
+  pendingBatch = []
+  const loaded = await thumbStore.batchLoad(batch)
+  for (const id of loaded) {
+    const url = thumbStore.cache.get(id)
+    if (url) thumbUrls.set(id, url!)
+  }
+}
+
+function scheduleBatchFlush() {
+  if (batchTimer) clearTimeout(batchTimer)
+  if (pendingBatch.length >= BATCH_CHUNK_SIZE) {
+    flushBatch()
+  } else {
+    batchTimer = setTimeout(() => flushBatch(), 50)
   }
 }
 
@@ -126,14 +161,39 @@ watch(visibleItems, (items) => {
   thumbLoadTimer = setTimeout(() => {
     const visibleIds = new Set(items.map(vi => vi.image.id))
 
-    // Enqueue new visible items (respecting concurrency limit)
+    // Collect uncached IDs, prioritizing items in the first few rows
+    const uncached: number[] = []
+    const rows = new Map<number, number[]>() // rowIndex -> [imageId, ...]
     for (const vi of items) {
       const id = vi.image.id
-      if (!thumbUrls.has(id) && !inflightThumbs.has(id) && !thumbQueue.includes(id)) {
-        thumbQueue.push(id)
+      if (!thumbUrls.has(id) && !thumbStore.loading.has(id)) {
+        const rowIndex = Math.floor(vi.idx / columns.value)
+        if (!rows.has(rowIndex)) rows.set(rowIndex, [])
+        rows.get(rowIndex)!.push(id)
       }
     }
-    processThumbQueue()
+
+    // Sort by row: above-fold rows first
+    const currentFirstRow = Math.floor(scrollTop.value / (cellHeight.value + GAP))
+    const sortedRows = Array.from(rows.entries()).sort(([a], [b]) =>
+      Math.abs(a - currentFirstRow) - Math.abs(b - currentFirstRow)
+    )
+    for (const [, ids] of sortedRows) {
+      uncached.push(...ids)
+    }
+
+    // Add priority items to batch, rest to fallback queue
+    const priorityCount = Math.min(uncached.length, BATCH_CHUNK_SIZE)
+    pendingBatch.push(...uncached.slice(0, priorityCount))
+    scheduleBatchFlush()
+
+    // Remaining items go to fallback per-item queue (lower priority, processed 2 at a time)
+    for (const id of uncached.slice(priorityCount)) {
+      if (!fallbackQueue.includes(id)) {
+        fallbackQueue.push(id)
+      }
+    }
+    processFallbackQueue()
 
     // Revoke URLs for items that scrolled out of view (keep a buffer of 100)
     if (thumbUrls.size > visibleIds.size + 100) {
