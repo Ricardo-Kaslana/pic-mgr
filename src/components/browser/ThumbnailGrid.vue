@@ -7,6 +7,7 @@ import { useSettingsStore } from '../../stores/settings'
 import { useThumbnailStore } from '../../stores/thumbnail'
 import { useWorkspaceStore } from '../../stores/workspace'
 import type { ImageRecord } from '../../types'
+import MoveToWorkspaceDialog from '../workspace/MoveToWorkspaceDialog.vue'
 
 const props = defineProps<{
   workspaceId: number
@@ -156,6 +157,7 @@ function handleDoubleClick(image: ImageRecord) {
 
 // Context menu
 const contextMenu = reactive({ visible: false, x: 0, y: 0, image: null as ImageRecord | null })
+const showWorkspacePicker = ref(false)
 
 function handleContextMenu(image: ImageRecord, e: MouseEvent) {
   e.preventDefault()
@@ -218,6 +220,27 @@ async function trashFile() {
     console.error('Trash failed:', e)
   }
   closeContextMenu()
+}
+
+async function moveToWorkspace() {
+  if (!contextMenu.image) return
+  showWorkspacePicker.value = true
+  closeContextMenu()
+}
+
+async function handleWorkspaceSelected(targetWsId: number) {
+  showWorkspacePicker.value = false
+  if (!contextMenu.image) return
+  const { invoke } = await import('@tauri-apps/api/core')
+  try {
+    await invoke('move_images', {
+      ids: [contextMenu.image.id],
+      destWorkspaceId: targetWsId,
+    })
+    emit('refresh')
+  } catch (e) {
+    console.error('Move to workspace failed:', e)
+  }
 }
 
 async function moveFile() {
@@ -339,10 +362,17 @@ defineExpose({ scrollToImage, locateAndFlash })
         <button role="menuitem" @click="openInExplorer"><span class="ctx-icon">📂</span>{{ t('context.openExplorer') }}</button>
         <button role="menuitem" @click="copyPath"><span class="ctx-icon">📋</span>{{ t('context.copyPath') }}</button>
         <button role="menuitem" @click="moveFile"><span class="ctx-icon">📁</span>{{ t('context.moveFile') }}</button>
+        <button role="menuitem" @click="moveToWorkspace"><span class="ctx-icon">🗂️</span>{{ t('context.moveToWorkspace') }}</button>
         <div class="context-divider"></div>
         <button role="menuitem" class="danger" @click="removeFromWorkspace"><span class="ctx-icon">🗑️</span>{{ t('context.removeFromWorkspace') }}</button>
         <button role="menuitem" class="danger" @click="trashFile"><span class="ctx-icon">🗑️</span>{{ t('context.moveToTrash') }}</button>
       </div>
+      <MoveToWorkspaceDialog
+        v-if="showWorkspacePicker"
+        :current-workspace-id="props.workspaceId"
+        @select="handleWorkspaceSelected"
+        @close="showWorkspacePicker = false"
+      />
     </Teleport>
   </div>
 </template>
