@@ -28,6 +28,7 @@ fn main() {
             });
             app.manage(ThumbnailState {
                 cache: Mutex::new(thumb_cache),
+                workspace_paths: Mutex::new(std::collections::HashMap::new()),
             });
             Ok(())
         })
@@ -53,7 +54,9 @@ fn main() {
             commands::tags::create_tag,
             commands::tags::delete_tag,
             commands::thumbnail::get_thumbnail,
+            commands::thumbnail::get_thumbnails_batch,
             commands::thumbnail::generate_thumbnail,
+            commands::thumbnail::generate_thumbnails_batch,
             commands::export::export_metadata,
         ])
         .run(tauri::generate_context!())
