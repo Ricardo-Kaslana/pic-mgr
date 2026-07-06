@@ -6,6 +6,7 @@ import { writeTextFile } from '@tauri-apps/plugin-fs'
 import { useI18n } from 'vue-i18n'
 import { useImageStore } from '../../stores/images'
 import { useSelectionStore } from '../../stores/selection'
+import { useTagStore } from '../../stores/tags'
 
 const props = defineProps<{ workspaceId: number }>()
 const emit = defineEmits<{
@@ -18,6 +19,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const imageStore = useImageStore()
 const selection = useSelectionStore()
+const tagStore = useTagStore()
 
 const selectMode = defineModel<boolean>('selectMode', { default: false })
 const showSortMenu = ref(false)
@@ -100,6 +102,7 @@ async function batchDelete() {
     selectMode.value = false
     imageStore.setPage(1)
     await imageStore.fetchImages(props.workspaceId)
+    await tagStore.fetchTags(props.workspaceId)
   } catch (e) {
     console.error('Delete failed:', e)
     emit('showToast', t('browser.deleteFailed', { error: String(e) }))
@@ -131,6 +134,7 @@ async function batchMove() {
     selectMode.value = false
     imageStore.setPage(1)
     await imageStore.fetchImages(props.workspaceId)
+    await tagStore.fetchTags(props.workspaceId)
   } catch (e) {
     console.error('Move failed:', e)
     emit('showToast', t('browser.moveFailed', { error: String(e) }))

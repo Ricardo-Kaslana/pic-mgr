@@ -40,6 +40,7 @@ async function removeTag(tagId: number) {
     tagIds: [tagId],
     action: 'remove',
   })
+  await tagStore.fetchTags(props.workspaceId)
   emit('updated')
 }
 
@@ -61,6 +62,7 @@ async function addTagById(tagId: number, _tagName: string) {
     tagIds: [tagId],
     action: 'add',
   })
+  await tagStore.fetchTags(props.workspaceId)
   newTagName.value = ''
   showSuggestions.value = false
   emit('updated')
@@ -73,13 +75,13 @@ async function addTag() {
   if (!tagId) {
     const tag = await tagStore.createTag(newTagName.value.trim())
     tagId = tag.id
-    await tagStore.fetchTags(props.workspaceId)
   }
   await invoke('batch_update_tags', {
     imageIds: [props.detail.id],
     tagIds: [tagId],
     action: 'add',
   })
+  await tagStore.fetchTags(props.workspaceId)
   newTagName.value = ''
   showSuggestions.value = false
   emit('updated')

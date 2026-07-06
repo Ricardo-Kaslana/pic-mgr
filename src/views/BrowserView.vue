@@ -128,7 +128,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           :workspace-id="workspaceId"
           :select-mode="selectMode"
           @select-detail="(id: number) => imageStore.fetchDetail(id)"
-          @refresh="() => { imageStore.setPage(1); imageStore.fetchImages(workspaceId) }"
+          @refresh="async () => { imageStore.setPage(1); await imageStore.fetchImages(workspaceId); await tagStore.fetchTags(workspaceId) }"
           @view-fullscreen="openFullscreen"
           @show-toast="showToast"
         />
