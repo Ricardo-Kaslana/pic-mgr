@@ -101,21 +101,39 @@ const visibleItems = computed<VisibleItem[]>(() => {
 const thumbUrls = reactive<Map<number, string>>(new Map())
 
 // Throttled thumbnail loader — fires at most once per 80ms scroll burst
+// Concurrency limiter: max 4 parallel IPC calls to prevent overwhelming the backend
+const MAX_THUMB_CONCURRENCY = 4
+const inflightThumbs = new Set<number>()
+const thumbQueue: number[] = []
+
+function processThumbQueue() {
+  while (inflightThumbs.size < MAX_THUMB_CONCURRENCY && thumbQueue.length > 0) {
+    const id = thumbQueue.shift()!
+    if (inflightThumbs.has(id) || thumbUrls.has(id)) continue
+    inflightThumbs.add(id)
+    thumbStore.load(id).then(url => {
+      if (url) thumbUrls.set(id, url)
+    }).finally(() => {
+      inflightThumbs.delete(id)
+      processThumbQueue()
+    })
+  }
+}
+
 let thumbLoadTimer: ReturnType<typeof setTimeout> | null = null
 watch(visibleItems, (items) => {
   if (thumbLoadTimer) clearTimeout(thumbLoadTimer)
   thumbLoadTimer = setTimeout(() => {
     const visibleIds = new Set(items.map(vi => vi.image.id))
 
-    // Load new visible items
+    // Enqueue new visible items (respecting concurrency limit)
     for (const vi of items) {
       const id = vi.image.id
-      if (!thumbUrls.has(id) && !thumbStore.loading.has(id)) {
-        thumbStore.load(id).then(url => {
-          if (url) thumbUrls.set(id, url)
-        })
+      if (!thumbUrls.has(id) && !inflightThumbs.has(id) && !thumbQueue.includes(id)) {
+        thumbQueue.push(id)
       }
     }
+    processThumbQueue()
 
     // Revoke URLs for items that scrolled out of view (keep a buffer of 100)
     if (thumbUrls.size > visibleIds.size + 100) {
