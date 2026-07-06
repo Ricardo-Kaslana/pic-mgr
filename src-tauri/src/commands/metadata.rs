@@ -135,15 +135,28 @@ pub fn move_images(
     state: State<AppState>,
     thumb_state: State<super::thumbnail::ThumbnailState>,
     ids: Vec<i64>,
-    dest_dir: String,
+    dest_dir: Option<String>,
+    dest_workspace_id: Option<i64>,
 ) -> Result<MoveResult, String> {
     if ids.is_empty() {
         return Ok(MoveResult { success: 0, failed: 0, errors: vec![] });
     }
 
-    let dest = PathBuf::from(&dest_dir);
+    // Resolve destination from workspace ID if provided
+    let dest_dir_resolved = if let Some(ws_id) = dest_workspace_id {
+        let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+        let workspace = crate::db::queries::get_workspace(&conn, ws_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Workspace {} not found", ws_id))?;
+        drop(conn);
+        workspace.path
+    } else {
+        dest_dir.ok_or_else(|| "Either dest_dir or dest_workspace_id must be provided".to_string())?
+    };
+
+    let dest = PathBuf::from(&dest_dir_resolved);
     if !dest.is_dir() {
-        return Err(format!("目标文件夹不存在: {}", dest_dir));
+        return Err(format!("目标文件夹不存在: {}", dest_dir_resolved));
     }
 
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
@@ -181,6 +194,7 @@ pub fn move_images(
         new_file_name: String,
     }
     let mut moved: Vec<MovedInfo> = Vec::new();
+    let target_workspace_id = dest_workspace_id;
 
     for img in &images {
         let src = PathBuf::from(&img.workspace_path).join(&img.relative_path);
@@ -226,7 +240,6 @@ pub fn move_images(
         }
     }
 
-    // Update DB for successfully moved files
     if !moved.is_empty() {
         // Clear stale thumbnails
         let cache = thumb_state.cache.lock().map_err(|e| e.to_string())?;
@@ -235,26 +248,41 @@ pub fn move_images(
         drop(cache);
 
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
-        for m in &moved {
-            let ws_path = PathBuf::from(&m.workspace_path);
-            // Check if destination is inside this workspace
-            let new_relative = if let Ok(rel) = m.dest_file.strip_prefix(&ws_path) {
-                Some(rel.to_string_lossy().replace('\\', "/"))
-            } else {
-                None
-            };
+        conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
 
-            if let Some(rel_path) = new_relative {
-                // File is still in workspace — update record in-place
+        for m in &moved {
+            if let Some(target_ws_id) = target_workspace_id {
+                // Cross-workspace move: update workspace_id + relative_path + file_name
+                let new_relative = m.dest_file
+                    .strip_prefix(&PathBuf::from(&dest_dir_resolved))
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_else(|_| m.new_file_name.clone());
+
                 conn.execute(
-                    "UPDATE images SET relative_path = ?1, file_name = ?2, updated_at = datetime('now') WHERE id = ?3",
-                    rusqlite::params![rel_path, m.new_file_name, m.id],
+                    "UPDATE images SET workspace_id = ?1, relative_path = ?2, file_name = ?3, updated_at = datetime('now') WHERE id = ?4",
+                    rusqlite::params![target_ws_id, new_relative, m.new_file_name, m.id],
                 ).map_err(|e| e.to_string())?;
             } else {
-                // File moved outside workspace — remove from DB
-                delete_db_records(&conn, &[m.id])?;
+                // Same-workspace or arbitrary directory move
+                let ws_path = PathBuf::from(&m.workspace_path);
+                let new_relative = if let Ok(rel) = m.dest_file.strip_prefix(&ws_path) {
+                    Some(rel.to_string_lossy().replace('\\', "/"))
+                } else {
+                    None
+                };
+
+                if let Some(rel_path) = new_relative {
+                    conn.execute(
+                        "UPDATE images SET relative_path = ?1, file_name = ?2, updated_at = datetime('now') WHERE id = ?3",
+                        rusqlite::params![rel_path, m.new_file_name, m.id],
+                    ).map_err(|e| e.to_string())?;
+                } else {
+                    delete_db_records(&conn, &[m.id])?;
+                }
             }
         }
+
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
     }
 
     Ok(MoveResult {
