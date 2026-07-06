@@ -156,7 +156,7 @@ pub fn move_images(
 
     let dest = PathBuf::from(&dest_dir_resolved);
     if !dest.is_dir() {
-        return Err(format!("目标文件夹不存在: {}", dest_dir_resolved));
+        return Err(format!("Destination folder does not exist: {}", dest_dir_resolved));
     }
 
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
@@ -247,8 +247,8 @@ pub fn move_images(
         delete_thumbnail_files(&cache, &moved_ids);
         drop(cache);
 
-        let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+        let mut conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
 
         for m in &moved {
             if let Some(target_ws_id) = target_workspace_id {
@@ -258,7 +258,7 @@ pub fn move_images(
                     .map(|r| r.to_string_lossy().replace('\\', "/"))
                     .unwrap_or_else(|_| m.new_file_name.clone());
 
-                conn.execute(
+                tx.execute(
                     "UPDATE images SET workspace_id = ?1, relative_path = ?2, file_name = ?3, updated_at = datetime('now') WHERE id = ?4",
                     rusqlite::params![target_ws_id, new_relative, m.new_file_name, m.id],
                 ).map_err(|e| e.to_string())?;
@@ -272,17 +272,17 @@ pub fn move_images(
                 };
 
                 if let Some(rel_path) = new_relative {
-                    conn.execute(
+                    tx.execute(
                         "UPDATE images SET relative_path = ?1, file_name = ?2, updated_at = datetime('now') WHERE id = ?3",
                         rusqlite::params![rel_path, m.new_file_name, m.id],
                     ).map_err(|e| e.to_string())?;
                 } else {
-                    delete_db_records(&conn, &[m.id])?;
+                    delete_db_records(&tx, &[m.id])?;
                 }
             }
         }
 
-        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
     }
 
     Ok(MoveResult {
