@@ -1,6 +1,12 @@
-# PicMgr — 本地图片管理器
+# CLAUDE.md
 
-Tauri 2 + Vue 3 + SQLite 本地图片管理器。所有元数据只写数据库，永不修改原始图片文件。
+Project-level guidance for AI agents.
+
+## 项目概览
+
+轻量、现代、美观的本地图片管理器。将文件夹设为工作区，为所有图片生成索引，支持标签、评分、备注、全文搜索。
+
+**所有元数据只写 SQLite，永不修改原始图片文件。**
 
 ## 项目结构
 
@@ -8,16 +14,14 @@ Tauri 2 + Vue 3 + SQLite 本地图片管理器。所有元数据只写数据库�
 pic-mgr/
 ├── src/                          — Vue 前端
 │   ├── stores/                   — 6 个 Pinia stores
-│   ├── views/                    — 5 个页面
-│   ├── components/               — UI 组件（browser/ 含 GridToolbar, ThumbnailGrid 等）
-│   ├── composables/              — Vue composables（useToast 等）
-│   ├── i18n/                     — vue-i18n 国际化 (zh-CN, en)
-│   ├── types/index.ts            — TypeScript 接口
-│   └── router/index.ts           — Vue Router
+│   ├── views/                    — 4 个页面
+│   ├── components/               — UI 组件
+│   ├── i18n/                     — vue-i18n (zh-CN, en)
+│   └── types/index.ts            — ImageRecord / ImageSummary / ImagePage / ImageSummaryPage
 ├── src-tauri/                    — Rust 后端
 │   └── src/
-│       ├── commands/             — 23 个 Tauri commands
-│       ├── db/                   — SQLite schema + queries
+│       ├── commands/             — 24 个 Tauri commands（含 get_images_light）
+│       ├── db/                   — SQLite schema + queries（含 PRAGMAs + 复合索引）
 │       └── scanner/              — 文件扫描 + 缩略图
 ├── docs/                         — 设计文档
 │   ├── adr/                      — 架构决策记录
@@ -36,8 +40,8 @@ pic-mgr/
 | 前端 | Vue 3 + TypeScript + Pinia + Vue Router 4 |
 | 国际化 | vue-i18n (zh-CN, en) |
 | 构建 | Vite |
-| 数据库 | SQLite (rusqlite, WAL, FTS5) |
-| 图片处理 | image-rs (WebP 缩略图) |
+| 数据库 | SQLite (rusqlite, WAL, FTS5, 复合索引) |
+| 图片处理 | image-rs (JPEG 缩略图) |
 | 哈希 | sha2 (SHA-256) |
 | 回收站 | trash (跨平台) |
 
@@ -67,19 +71,26 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 
 - **AppState** 通过 `app.manage()` 注入，commands 通过 `State<AppState>` 获取
 - **Database** 使用 `Mutex<Connection>` 保护并发访问
+- **SQLite PRAGMAs** 启动时设置：`synchronous=NORMAL`、`cache_size=-20000`（20 MB）、`temp_store=MEMORY`、`mmap_size=256 MB`，加 `ANALYZE` 让查询规划器选对索引
+- **复合索引** `(workspace_id, sort_column)` 覆盖按工作区分页 + 排序的所有热路径，外加 `(workspace_id, file_hash)` 给去重、`(workspace_id, format)` 给筛选
+- **N+1 查询消除** — `get_tags` 单条 GROUP BY；`find_duplicate_groups` 用 CTE + JOIN；批量缩略图用 `WHERE id IN (...)` 单次查询
+- **轻量 grid 投影** — `ImageSummary`（~80 B/行）只含 grid 渲染所需的字段，`get_images_light` 命令回传它；`ImageRecord`（~250 B/行）只在打开详情面板时通过 `get_image_detail` 拉取
 - **扫描器** 不使用 image crate 读取尺寸（避免栈溢出），只做文件系统元数据 + SHA-256
 - **缩略图** 按需生成，包裹在 `catch_unwind` 中
-- **虚拟滚动** 自适应网格布局，`shallowRef<Map>` + `reactive<Map>` 双层缓存触发缩略图重渲染
-- **LRU 缩略图缓存** 最多 500 个 blob URL，`shallowRef` 原地 mutation + `triggerRef` 避免 O(n) 复制；滚动离开可视区自动 revoke
-- **DB 索引** `idx_images_hash`（查重）和 `idx_image_tags_tag_id`（标签 JOIN）
+- **缩略图 batch** 单次 IPC 处理最多 60 个 ID（`BATCH_CHUNK_SIZE`），后端用 `WHERE id IN (...)` 一次查完，剩余的走 4 路并发 fallback；下方 6 行预取区防止滚动时出现骨架屏
+- **虚拟滚动** 自适应网格布局，scroll 在 65% 触发下一页（避免"到底才加载"造成的卡顿）
+- **LRU 缩略图缓存** `thumbStore.cache` 最多 500 个 blob URL，`shallowRef<Map>` + `triggerRef` 触发渲染更新；滚动远离 viewport 时调用 `thumbStore.revoke` 由 LRU 负责生命周期
+- **thumbUrls 双层结构** — `thumbStore.cache` 是 blob URL 唯一持有者，ThumnbnailGrid 的 `thumbUrls` 是组件本地的渲染投影；`flushBatch` 必须从 cache 拉所有 ID 的 URL（不只是 `loaded`），`evictAllThumbUrls` 不能 revoke 仍在 cache 里的 URL
+- **分页** 追加模式（`append=true`），不替换已有数据；默认 `pageSize = 100`
+- **DB 索引** 除复合索引外保留单列 `idx_images_workspace_id`、`idx_image_tags_tag_id` 处理纯前缀筛选
 - **DB 事务** 扫描插入和批量标签操作包裹 `BEGIN`/`COMMIT`，避免逐条 fsync
 - **FTS5 安全** 用户搜索输入经 `sanitize_fts_query` 双引号包裹 + 转义，防止 MATCH 语法注入
-- **行映射辅助** `row_to_image_record` / `row_to_workspace` 统一在 `db/queries.rs`，消除 6 处重复
+- **行映射辅助** `row_to_image_record` / `row_to_image_summary` / `row_to_workspace` 统一在 `db/queries.rs`
+- **Stores 缓存** — `workspaceStore.fetchAll` 单飞 + 缓存；`tagStore.fetchTags` 单飞 + 按 workspace 缓存；避免重复 IPC
 - **BrowserView 拆分** 主文件只做布局编排；GridToolbar 组件处理排序/选择/批量/导出；useToast composable 管理通知
 - **i18n 完整** 所有 UI 字符走 `t()` / `$t()`，无硬编码中文
 - **ARIA 无障碍** 下拉菜单 `aria-haspopup`/`aria-expanded`、右键菜单 `role="menu"`、评分 `role="radiogroup"`、弹窗 `role="dialog"`、toast `role="alert"`
 - **缩略图格式检测** 使用 `with_guessed_format()` 从文件头魔数判断，不依赖扩展名
-- **分页** 追加模式（`append=true`），不替换已有数据
 - **DedupView** 内嵌为 BrowserView 子组件，非独立路由（避免 Vue Router 嵌套黑屏）
 - **文件日期** `created_at` 存 filesystem mtime；`file_created_at` 存 birth time；`indexed_at` 存入库时间
 - **DB 迁移** 启动时 `ALTER TABLE ADD COLUMN`，`.ok()` 忽略已存在错误
@@ -97,69 +108,3 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 - 图片尺寸在扫描时为 null，生成缩略图后才填充
 - Windows 上 WebView2 需禁用 GPU 加速（`--disable-gpu`）
 - RAW 格式（CR2/NEF/ARW）缩略图可能失败（已 catch）
-
-## Behavioral guidelines
-
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-### 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-### 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-### 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-### 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

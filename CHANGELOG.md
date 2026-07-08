@@ -1,6 +1,33 @@
 # Changelog
 
+## [0.3.3] — 2026-07-08
+
+### Optimized
+
+- **Lightweight grid payload (`ImageSummary`)**: New projection (~80 B/row vs `ImageRecord` ~250 B/row) excludes `file_hash`, `notes`, `last_viewed_at`, `file_created_at` that the grid never renders. New `get_images_light` Tauri command backs the grid; `get_image_detail` still returns the full record when the user opens the right panel. ~3x IPC payload reduction on 100+ image workspaces.
+- **SQLite PRAGMAs at startup**: `synchronous=NORMAL`, `cache_size=-20000` (20 MB), `temp_store=MEMORY`, `mmap_size=256 MB`, plus `ANALYZE` for query planner stats. Safe with WAL mode; ~2x write speedup over `synchronous=FULL`.
+- **Composite indexes for the workspace+sort hot path**: 8 new indexes cover `(workspace_id, indexed_at|updated_at|file_name|file_size|rating|created_at|file_created_at)`, plus `(workspace_id, format)` and `(workspace_id, file_hash)` for dedup.
+- **N+1 query elimination**:
+  - `get_tags`: collapsed per-tag correlated subqueries into a single `GROUP BY` join.
+  - `find_duplicates`: replaced the 1 + N hash loop with a CTE + JOIN single query.
+  - `generate_thumbnails_batch` / `get_thumbnails_batch`: replaced per-id `query_row` + `cache_path().exists()` with one `WHERE id IN (...)` round-trip plus a single workspace-path resolution pass. 1000 image_ids now mean 1 DB query, not 2000.
+- **Frontend reactivity**: `thumbUrls` switched from `reactive(new Map())` to `shallowRef(new Map())` + `triggerRef` for batched updates. Eliminates Vue deep-proxy overhead for 100+ concurrent thumbnail entries.
+- **Thumbnail batch tuning**: `BATCH_CHUNK_SIZE` 20 → 60 (single IPC now covers the whole first viewport), `FALLBACK_CONCURRENCY` 2 → 4. Added a 6-row prefetch zone below viewport to prevent skeleton flashes while scrolling.
+- **Smart scroll pre-loading**: Next page now triggers at 65% scrolled (was: within 500 px of bottom). The new threshold lets the next page land before the user reaches the bottom — no visible stall on 100+ image workspaces.
+- **Default page size 50 → 100**: 100+ image workspaces now render in a single round-trip instead of forcing a scroll-triggered second fetch.
+- **Workspace list cache**: `workspaceStore.fetchAll` is now single-flight + cached, skipping the IPC round-trip on every subsequent navigation. `create` / `remove` update the local cache in place.
+- **Tag fetch dedup**: `tagStore.fetchTags` gained single-flight + per-workspace cache so the duplicate `fetchTags` calls from `BrowserView` and `SidebarPanel` mount hooks coalesce into one IPC.
+- **CSS paint containment**: `.grid-cell` got `contain: layout style; will-change: transform;`; `<img>` got `decoding="async"`. Reduces layout/paint cost during scroll.
+- **BrowserView init cleanup**: `fetchAll` is no longer awaited; the catch-up branch only re-fires when the workspace is genuinely empty (`total === 0 && !scanning`) instead of unconditionally. `generate_thumbnails_batch` now only fires after a real scan, not on every workspace open.
+
+### Fixed
+
+- **Cached thumbnails invisible on workspace re-entry** (regression from the local `thumbUrls` map cleanup). `flushBatch` only iterated the `loaded` set from `thumbStore.batchLoad`, but `batchLoad` filters cached ids out of `loaded`, so cached URLs were never surfaced to the new (empty) `thumbUrls` on re-entry — every thumbnail rendered as a placeholder until the next app restart. `flushBatch` now iterates the full batch and pulls URLs from `thumbStore.cache` for every id. `evictAllThumbUrls` no longer revokes URLs that the store cache is still holding; LRU eviction owns their lifetime. Workspaces with 100+ cached images now show thumbnails immediately on re-entry, no extra IPC needed.
+
 ## [0.3.2] — 2026-07-06
+
+### Optimized
+ — 2026-07-06
 
 ### Optimized
 
