@@ -1,5 +1,5 @@
 use tauri::State;
-use crate::models::{ImagePage, ImageDetail, ImageFilters};
+use crate::models::{ImagePage, ImageSummaryPage, ImageDetail, ImageFilters};
 use crate::AppState;
 
 #[derive(serde::Serialize)]
@@ -13,37 +13,14 @@ fn find_duplicates_inner(
     workspace_id: i64,
 ) -> Result<Vec<DuplicateGroup>, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
-
-    let hashes: Vec<String> = {
-        let mut stmt = conn.prepare(
-            "SELECT file_hash FROM images WHERE workspace_id = ?1 AND file_hash IS NOT NULL
-             GROUP BY file_hash HAVING COUNT(*) > 1"
-        ).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map(rusqlite::params![workspace_id], |row| row.get(0))
-            .map_err(|e| e.to_string())?;
-        rows.filter_map(|r| r.ok()).collect()
-    };
-
-    // Prepare statement once, reuse for all hash lookups
-    let mut img_stmt = conn.prepare(
-        "SELECT id, workspace_id, relative_path, file_name, file_size, file_hash, width, height, format, thumbnail_path, notes, rating, created_at, file_created_at, updated_at, indexed_at, last_viewed_at
-         FROM images WHERE file_hash = ?1 AND workspace_id = ?2"
-    ).map_err(|e| e.to_string())?;
-
-    let mut groups = Vec::new();
-    for hash in hashes {
-        let rows = img_stmt.query_map(
-            rusqlite::params![hash, workspace_id],
-            crate::db::queries::row_to_image_record,
-        ).map_err(|e| e.to_string())?;
-        let images: Vec<crate::models::ImageRecord> = rows.filter_map(|r| r.ok()).collect();
-
-        if !images.is_empty() {
-            groups.push(DuplicateGroup { hash, images });
-        }
-    }
-
-    Ok(groups)
+    // Single-query duplicate detection via CTE — replaces the previous
+    // 1 + N query loop (one per duplicate hash).
+    let groups = crate::db::queries::find_duplicate_groups(&conn, workspace_id)
+        .map_err(|e| e.to_string())?;
+    Ok(groups
+        .into_iter()
+        .map(|(hash, images)| DuplicateGroup { hash, images })
+        .collect())
 }
 
 #[tauri::command]
@@ -70,6 +47,23 @@ pub fn get_images(
 ) -> Result<ImagePage, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     crate::db::queries::get_images(&conn, workspace_id, &filters, page, page_size)
+        .map_err(|e| e.to_string())
+}
+
+/// Lightweight grid query — the hot path for first-load of 100+ image
+/// workspaces. Returns ~3x less data than `get_images` and avoids the
+/// fields the grid never reads (file_hash, relative_path, notes,
+/// last_viewed_at, file_created_at).
+#[tauri::command]
+pub fn get_images_light(
+    state: State<AppState>,
+    workspace_id: i64,
+    filters: ImageFilters,
+    page: i32,
+    page_size: i32,
+) -> Result<ImageSummaryPage, String> {
+    let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+    crate::db::queries::get_images_light(&conn, workspace_id, &filters, page, page_size)
         .map_err(|e| e.to_string())
 }
 

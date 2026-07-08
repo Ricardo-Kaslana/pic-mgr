@@ -60,8 +60,27 @@ CREATE TRIGGER IF NOT EXISTS images_fts_update AFTER UPDATE ON images BEGIN
     INSERT INTO images_fts(rowid, file_name, notes) VALUES (new.id, new.file_name, new.notes);
 END;
 
-CREATE INDEX IF NOT EXISTS idx_images_hash ON images(file_hash);
-CREATE INDEX IF NOT EXISTS idx_image_tags_tag_id ON image_tags(tag_id);
+-- Indexes
+-- Hot path: filter by workspace_id and sort by indexed_at/updated_at/file_name.
+-- Composite indexes with the workspace_id column leading avoid full table scans
+-- on the browse-by-workspace path that fires on every workspace open.
 CREATE INDEX IF NOT EXISTS idx_images_workspace_id ON images(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_images_workspace_indexed ON images(workspace_id, indexed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_updated ON images(workspace_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_name ON images(workspace_id, file_name);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_size ON images(workspace_id, file_size DESC);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_rating ON images(workspace_id, rating DESC);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_created ON images(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_images_workspace_file_created ON images(workspace_id, file_created_at DESC);
+
+-- Filter-by-format inside a workspace.
+CREATE INDEX IF NOT EXISTS idx_images_workspace_format ON images(workspace_id, format);
+
+-- Dedup hot path: GROUP BY file_hash filtered by workspace_id.
+CREATE INDEX IF NOT EXISTS idx_images_workspace_hash ON images(workspace_id, file_hash);
+CREATE INDEX IF NOT EXISTS idx_images_hash ON images(file_hash);
+
+-- image_tags lookups: filter by tag_id (sidebar tag filter) + reverse (image detail).
+CREATE INDEX IF NOT EXISTS idx_image_tags_tag_id ON image_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_image_tags_image_id ON image_tags(image_id);
 ";

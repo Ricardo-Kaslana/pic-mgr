@@ -26,6 +26,28 @@ export interface ImageRecord {
   last_viewed_at: string | null
 }
 
+/// Lightweight image projection returned by `get_images_light`.
+/// The grid only renders: thumbnail, file name, rating, selection state.
+/// The context menu needs relative_path for "open in explorer" / "copy
+/// path" / move / trash actions, so we include it (the rest of the heavy
+/// fields — file_hash, notes, last_viewed_at, file_created_at — are still
+/// excluded). A typical row is ~3x smaller than the full ImageRecord.
+export interface ImageSummary {
+  id: number
+  workspace_id: number
+  relative_path: string
+  file_name: string
+  file_size: number | null
+  width: number | null
+  height: number | null
+  format: string | null
+  thumbnail_path: string | null
+  rating: number | null
+  updated_at: string
+  indexed_at: string
+  created_at: string | null
+}
+
 export interface ImageDetail extends ImageRecord {
   tags: Tag[]
 }
@@ -42,6 +64,13 @@ export interface TagWithCount extends Tag {
 
 export interface ImagePage {
   images: ImageRecord[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface ImageSummaryPage {
+  images: ImageSummary[]
   total: number
   page: number
   page_size: number

@@ -3,10 +3,10 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '../../stores/workspace'
-import type { ImageRecord } from '../../types'
+import type { ImageSummary } from '../../types'
 
 const props = defineProps<{
-  images: ImageRecord[]
+  images: ImageSummary[]
   initialIndex: number
 }>()
 const emit = defineEmits<{ close: [] }>()
@@ -21,7 +21,7 @@ const currentImage = computed(() => props.images[currentIndex.value])
 const hasPrev = computed(() => currentIndex.value > 0)
 const hasNext = computed(() => currentIndex.value < props.images.length - 1)
 
-function getAbsPath(img: ImageRecord): string {
+function getAbsPath(img: ImageSummary): string {
   const ws = workspaceStore.workspaces.find(w => w.id === img.workspace_id)
   if (!ws) return ''
   return `${ws.path}\\${img.relative_path}`.replace(/\\\\/g, '\\')

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, reactive, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, shallowRef, triggerRef, watch, reactive, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useImageStore } from '../../stores/images'
 import { useSelectionStore } from '../../stores/selection'
 import { useSettingsStore } from '../../stores/settings'
 import { useThumbnailStore } from '../../stores/thumbnail'
 import { useWorkspaceStore } from '../../stores/workspace'
-import type { ImageRecord } from '../../types'
+import type { ImageSummary } from '../../types'
 import MoveToWorkspaceDialog from '../workspace/MoveToWorkspaceDialog.vue'
 
 const props = defineProps<{
@@ -31,7 +31,6 @@ const containerRef = ref<HTMLElement | null>(null)
 const scrollTop = ref(0)
 const containerWidth = ref(800)
 const containerHeight = ref(600)
-// ID of the image currently flashing a brief "return focus" highlight
 const flashId = ref<number | null>(null)
 
 const GAP = 12
@@ -69,7 +68,7 @@ const endRow = computed(() =>
 )
 
 interface VisibleItem {
-  image: ImageRecord
+  image: ImageSummary
   idx: number
   style: Record<string, string>
 }
@@ -97,37 +96,84 @@ const visibleItems = computed<VisibleItem[]>(() => {
   return items
 })
 
-// Reactive thumb URL map — separate from store cache for Vue reactivity
-const thumbUrls = reactive<Map<number, string>>(new Map())
+// ── Thumbnail URL cache ──
+//
+// The original implementation used `reactive(new Map())`, which makes
+// Vue proxy every entry. With 100+ thumbnails being loaded in parallel
+// this proxy machinery becomes the dominant cost on first paint.
+//
+// shallowRef<Map> + triggerRef gives us manual control: the Map is
+// mutated in place (O(1) per insert) and a single triggerRef fans out
+// one re-render to all consumers. The template still works because
+// shallowRef.value is auto-unwrapped in render contexts.
+const thumbUrls = shallowRef<Map<number, string>>(new Map())
+
+function setThumbUrlsBulk(updates: Map<number, string>) {
+  if (updates.size === 0) return
+  const m = thumbUrls.value
+  for (const [id, url] of updates) m.set(id, url)
+  triggerRef(thumbUrls)
+}
+
+function removeThumbUrls(ids: Iterable<number>) {
+  const m = thumbUrls.value
+  let changed = false
+  for (const id of ids) {
+    if (m.delete(id)) changed = true
+  }
+  if (changed) triggerRef(thumbUrls)
+}
+
+function evictAllThumbUrls() {
+  if (thumbUrls.value.size === 0) return
+  for (const [id, url] of thumbUrls.value) {
+    // Skip URLs the store cache is still holding — the cache will
+    // revoke them via its own LRU eviction when its size exceeds
+    // MAX_CACHE_SIZE. Revoking here would leave a dangling reference
+    // in `thumbStore.cache` and break cached thumbnails on the next
+    // workspace visit.
+    if (thumbStore.cache.has(id)) continue
+    URL.revokeObjectURL(url)
+  }
+  thumbUrls.value = new Map()
+  triggerRef(thumbUrls)
+}
 
 /**
- * Priority-based batch thumbnail loading system.
+ * Priority-based batch thumbnail loading.
  *
- * Design:
- * 1. On every visibleItems change, we batch-load uncached thumbnails via a single
- *    `get_thumbnails_batch` IPC call — avoids 30+ individual IPC calls.
- * 2. The first visible row (above the fold) is prioritized; the rest follow.
- * 3. A lazy fallback per-item queue handles items added during scroll (when waiting
- *    for a full batch would feel laggy).
- * 4. Concurrency limit lifted — the backend batch command is fast because it avoids
- *    repeated DB lock acquisitions.
+ * Key changes from the original:
+ *  1. Initial batch size bumped from 20 → 60 to cover the typical
+ *     first-viewport (50-100 cells) in one IPC round-trip. The
+ *     backend's `get_thumbnails_batch` now uses a single SQL IN
+ *     query so this scales linearly without DB lock contention.
+ *  2. thumbUrls is shallowRef + triggerRef — no deep proxy overhead
+ *     for 100+ concurrent entries.
+ *  3. Prefetch zone: we also queue thumbnails one viewport ahead
+ *     of the bottom so the user does not see a flash of skeleton
+ *     placeholders while scrolling down.
+ *  4. Single trigger per batch flush — 60 inserts + 1 triggerRef
+ *     instead of 60 individual reactive updates.
  */
-const BATCH_CHUNK_SIZE = 20
+const BATCH_CHUNK_SIZE = 60
+const PREFETCH_ROWS = 6
 let pendingBatch: number[] = []
 let batchTimer: ReturnType<typeof setTimeout> | null = null
 
-// Per-item fallback queue for items scrolled into view between batch ticks
-const FALLBACK_CONCURRENCY = 2
+const FALLBACK_CONCURRENCY = 4
 const inflightFallback = new Set<number>()
 const fallbackQueue: number[] = []
 
 function processFallbackQueue() {
   while (inflightFallback.size < FALLBACK_CONCURRENCY && fallbackQueue.length > 0) {
     const id = fallbackQueue.shift()!
-    if (inflightFallback.has(id) || thumbUrls.has(id)) continue
+    if (inflightFallback.has(id) || thumbUrls.value.has(id)) continue
     inflightFallback.add(id)
     thumbStore.load(id).then(url => {
-      if (url) thumbUrls.set(id, url)
+      if (url) {
+        thumbUrls.value.set(id, url)
+        triggerRef(thumbUrls)
+      }
     }).finally(() => {
       inflightFallback.delete(id)
       processFallbackQueue()
@@ -139,11 +185,18 @@ async function flushBatch() {
   if (pendingBatch.length === 0) return
   const batch = pendingBatch
   pendingBatch = []
-  const loaded = await thumbStore.batchLoad(batch)
-  for (const id of loaded) {
+  // batchLoad returns only the ids that required a backend round-trip;
+  // ids that were already in the cache are filtered out and never appear
+  // in `loaded`. We must still surface their URLs to the grid, otherwise
+  // cached thumbnails render as placeholders on the *next* workspace
+  // visit (after this component instance is recreated).
+  await thumbStore.batchLoad(batch)
+  const updates = new Map<number, string>()
+  for (const id of batch) {
     const url = thumbStore.cache.get(id)
-    if (url) thumbUrls.set(id, url!)
+    if (url) updates.set(id, url)
   }
+  setThumbUrlsBulk(updates)
 }
 
 function scheduleBatchFlush() {
@@ -161,66 +214,100 @@ watch(visibleItems, (items) => {
   thumbLoadTimer = setTimeout(() => {
     const visibleIds = new Set(items.map(vi => vi.image.id))
 
-    // Collect uncached IDs, prioritizing items in the first few rows
-    const uncached: number[] = []
-    const rows = new Map<number, number[]>() // rowIndex -> [imageId, ...]
+    // Collect uncached IDs, prioritizing items in the first few rows.
+    // The local Map is named `rowGroups` to avoid shadowing the
+    // outer `rows` computed (which gives the total row count).
+    const rowGroups = new Map<number, number[]>()
     for (const vi of items) {
       const id = vi.image.id
-      if (!thumbUrls.has(id) && !thumbStore.loading.has(id)) {
+      if (!thumbUrls.value.has(id) && !thumbStore.loading.has(id)) {
         const rowIndex = Math.floor(vi.idx / columns.value)
-        if (!rows.has(rowIndex)) rows.set(rowIndex, [])
-        rows.get(rowIndex)!.push(id)
+        if (!rowGroups.has(rowIndex)) rowGroups.set(rowIndex, [])
+        rowGroups.get(rowIndex)!.push(id)
       }
     }
-
-    // Sort by row: above-fold rows first
     const currentFirstRow = Math.floor(scrollTop.value / (cellHeight.value + GAP))
-    const sortedRows = Array.from(rows.entries()).sort(([a], [b]) =>
+    const sortedRows = Array.from(rowGroups.entries()).sort(([a], [b]) =>
       Math.abs(a - currentFirstRow) - Math.abs(b - currentFirstRow)
     )
-    for (const [, ids] of sortedRows) {
-      uncached.push(...ids)
-    }
+    const uncached: number[] = []
+    for (const [, ids] of sortedRows) uncached.push(...ids)
 
-    // Add priority items to batch, rest to fallback queue
+    // First batch goes immediately; remainder is processed in
+    // smaller concurrent fallback (4 at a time, increased from 2
+    // since each individual request is now cheap).
     const priorityCount = Math.min(uncached.length, BATCH_CHUNK_SIZE)
     pendingBatch.push(...uncached.slice(0, priorityCount))
     scheduleBatchFlush()
-
-    // Remaining items go to fallback per-item queue (lower priority, processed 2 at a time)
     for (const id of uncached.slice(priorityCount)) {
-      if (!fallbackQueue.includes(id)) {
+      if (!fallbackQueue.includes(id) && !inflightFallback.has(id)) {
         fallbackQueue.push(id)
       }
     }
     processFallbackQueue()
 
-    // Revoke URLs for items that scrolled out of view (keep a buffer of 100)
-    if (thumbUrls.size > visibleIds.size + 100) {
-      for (const [id] of thumbUrls) {
-        if (!visibleIds.has(id)) {
-          thumbUrls.delete(id)
-          thumbStore.revoke(id)
+    // Prefetch thumbnails one viewport-row ahead of the bottom so
+    // scrolling does not surface empty skeleton cells.
+    const prefetchEndRow = Math.min(
+      rows.value,
+      endRow.value + PREFETCH_ROWS
+    )
+    if (prefetchEndRow > endRow.value) {
+      for (let r = endRow.value; r < prefetchEndRow; r++) {
+        for (let c = 0; c < columns.value; c++) {
+          const idx = r * columns.value + c
+          if (idx >= imageStore.images.length) break
+          const id = imageStore.images[idx].id
+          if (!thumbUrls.value.has(id) && !thumbStore.loading.has(id) && !fallbackQueue.includes(id) && !inflightFallback.has(id)) {
+            fallbackQueue.push(id)
+          }
         }
+      }
+      processFallbackQueue()
+    }
+
+    // Evict URLs for items that scrolled far out of view (keep 200 cells of buffer)
+    if (thumbUrls.value.size > visibleIds.size + 200) {
+      const toEvict: number[] = []
+      for (const [id] of thumbUrls.value) {
+        if (!visibleIds.has(id)) toEvict.push(id)
+      }
+      if (toEvict.length > 0) {
+        // Evict in one pass: bulk remove from grid cache, then revoke URLs.
+        for (const id of toEvict) thumbStore.revoke(id)
+        removeThumbUrls(toEvict)
       }
     }
   }, 80)
 }, { immediate: true })
 
+// Track the highest page we have already requested so the pre-load
+// path is not re-triggered on every scroll tick while the request
+// is in flight.
+let highestRequestedPage = 1
 function onScroll(e: Event) {
   const el = e.target as HTMLElement
   scrollTop.value = el.scrollTop
 
-  // Load more when near bottom
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 500) {
-    if (!imageStore.loading && imageStore.images.length < imageStore.total) {
-      imageStore.setPage(imageStore.page + 1)
-      imageStore.fetchImages(props.workspaceId, true)
+  // Pre-load next page when 65% scrolled. The previous threshold
+  // (within 500px of bottom) was too late: by the time the user hit
+  // the trigger the IPC + render of the next page caused a visible
+  // stutter on 100+ image workspaces. Pre-loading at 65% gives the
+  // next page time to land before the user reaches the bottom.
+  if (imageStore.images.length < imageStore.total && !imageStore.loading) {
+    const scrolledPct = (el.scrollTop + el.clientHeight) / el.scrollHeight
+    if (scrolledPct > 0.65 || el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+      const nextPage = imageStore.page + 1
+      if (nextPage > highestRequestedPage) {
+        highestRequestedPage = nextPage
+        imageStore.setPage(nextPage)
+        imageStore.fetchImages(props.workspaceId, true)
+      }
     }
   }
 }
 
-function handleClick(image: ImageRecord, e: MouseEvent) {
+function handleClick(image: ImageSummary, e: MouseEvent) {
   if (props.selectMode) {
     selection.toggle(image.id, e.shiftKey)
   } else {
@@ -228,17 +315,17 @@ function handleClick(image: ImageRecord, e: MouseEvent) {
   }
 }
 
-function handleDoubleClick(image: ImageRecord) {
+function handleDoubleClick(image: ImageSummary) {
   if (props.selectMode) return
   const idx = imageStore.images.findIndex(i => i.id === image.id)
   if (idx >= 0) emit('viewFullscreen', idx)
 }
 
 // Context menu
-const contextMenu = reactive({ visible: false, x: 0, y: 0, image: null as ImageRecord | null })
+const contextMenu = reactive({ visible: false, x: 0, y: 0, image: null as ImageSummary | null })
 const showWorkspacePicker = ref(false)
 
-function handleContextMenu(image: ImageRecord, e: MouseEvent) {
+function handleContextMenu(image: ImageSummary, e: MouseEvent) {
   e.preventDefault()
   if (!selection.selectedIds.has(image.id)) {
     selection.clear()
@@ -254,7 +341,7 @@ function closeContextMenu() {
   contextMenu.visible = false
 }
 
-function getAbsolutePath(image: ImageRecord): string {
+function getAbsolutePath(image: ImageSummary): string {
   const ws = workspaceStore.workspaces.find(w => w.id === image.workspace_id)
   if (!ws) return image.relative_path
   return `${ws.path}\\${image.relative_path}`.replace(/\\\\/g, '\\')
@@ -361,6 +448,8 @@ onMounted(() => {
 })
 onUnmounted(() => {
   resizeObserver?.disconnect()
+  // Free blob URLs so they don't leak across workspace switches.
+  evictAllThumbUrls()
 })
 
 const detailImageId = computed(() => imageStore.selectedDetail?.id ?? null)
@@ -382,21 +471,31 @@ async function locateAndFlash(imageId: number) {
   await nextTick()
   await new Promise(r => setTimeout(r, 50))
   scrollToImage(imageId)
-  // 清掉旧的 flash，下一帧再设回来，确保同一图片连续触发也能重新播放动画
   flashId.value = null
   await nextTick()
   flashId.value = imageId
   setTimeout(() => { flashId.value = null }, 1200)
 }
 
+// Reset scroll-pagination state on workspace switch so the next
+// pre-load pass starts from page 1.
+watch(() => props.workspaceId, () => {
+  highestRequestedPage = 1
+  pendingBatch = []
+  fallbackQueue.length = 0
+  inflightFallback.clear()
+  if (batchTimer) { clearTimeout(batchTimer); batchTimer = null }
+  if (thumbLoadTimer) { clearTimeout(thumbLoadTimer); thumbLoadTimer = null }
+  evictAllThumbUrls()
+  scrollTop.value = 0
+})
+
 watch(() => imageStore.selectedDetail, async (detail, prev) => {
   if (detail) {
-    // 打开详情：滚动到该图片
     await nextTick()
     await new Promise(r => setTimeout(r, 80))
     scrollToImage(detail.id)
   } else if (!detail && prev) {
-    // 关闭详情：定位并短暂高亮上次打开的图片
     const targetId = imageStore.lastSelectedId
     if (targetId == null) return
     locateAndFlash(targetId)
@@ -425,6 +524,7 @@ defineExpose({ scrollToImage, locateAndFlash })
             :src="thumbUrls.get(vi.image.id)"
             :alt="vi.image.file_name"
             loading="lazy"
+            decoding="async"
           />
           <div v-else-if="thumbStore.loading.has(vi.image.id)" class="skeleton"></div>
           <div v-else class="placeholder"><span>🖼️</span></div>
@@ -488,6 +588,8 @@ defineExpose({ scrollToImage, locateAndFlash })
   display: flex;
   flex-direction: column;
   position: absolute;
+  contain: layout style;
+  will-change: transform;
 }
 .grid-cell:hover {
   border-color: var(--accent);

@@ -9,24 +9,43 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const currentId = ref<number | null>(null)
   const scanProgress = ref<ScanProgress | null>(null)
 
+  // The list of workspaces is small (typically < 20) and rarely changes,
+  // so we cache it after the first load and skip the IPC round-trip
+  // on every subsequent navigation. This was previously a blocking
+  // `await` in BrowserView.onMounted that fired on every workspace
+  // switch.
+  const loaded = ref(false)
+  const loading = ref(false)
+
   const current = computed(() =>
     workspaces.value.find(w => w.id === currentId.value) ?? null
   )
 
-  async function fetchAll() {
-    workspaces.value = await invoke<Workspace[]>('list_workspaces')
+  async function fetchAll(force = false) {
+    if (loading.value) return // single-flight: ignore concurrent calls
+    if (loaded.value && !force) return
+    loading.value = true
+    try {
+      workspaces.value = await invoke<Workspace[]>('list_workspaces')
+      loaded.value = true
+    } finally {
+      loading.value = false
+    }
   }
 
   async function create(name: string, path: string) {
     const ws = await invoke<Workspace>('create_workspace', { name, path })
-    await fetchAll()
+    // Update local cache instead of a full refetch.
+    const next = [ws, ...workspaces.value.filter(w => w.id !== ws.id)]
+    next.sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
+    workspaces.value = next
     return ws
   }
 
   async function remove(id: number) {
     await invoke('delete_workspace', { id })
+    workspaces.value = workspaces.value.filter(w => w.id !== id)
     if (currentId.value === id) currentId.value = null
-    await fetchAll()
   }
 
   async function scan(id: number) {
@@ -56,5 +75,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     currentId.value = id
   }
 
-  return { workspaces, currentId, current, scanProgress, fetchAll, create, remove, scan, startScan, select }
+  function invalidate() {
+    loaded.value = false
+  }
+
+  return { workspaces, currentId, current, scanProgress, loaded, loading, fetchAll, create, remove, scan, startScan, select, invalidate }
 })

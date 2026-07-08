@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useTagStore } from '../../stores/tags'
+
 import { useImageStore } from '../../stores/images'
 import SearchBar from './SearchBar.vue'
 import TagFilter from './TagFilter.vue'
@@ -9,12 +8,14 @@ import TagFilter from './TagFilter.vue'
 const props = defineProps<{ workspaceId: number }>()
 const { t } = useI18n()
 
-const tagStore = useTagStore()
+
 const imageStore = useImageStore()
 
-onMounted(() => {
-  tagStore.fetchTags(props.workspaceId)
-})
+// Note: previously this component fired its own `tagStore.fetchTags` on
+// mount, which raced with BrowserView's own call on the same workspace
+// and produced a duplicate IPC round-trip on every workspace open. The
+// fetchTags store now has a single-flight guard that coalesces both
+// callers into one DB read, so we just rely on that here.
 
 function fetchWithFilters() {
   imageStore.setPage(1)

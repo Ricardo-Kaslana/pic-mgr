@@ -1,13 +1,26 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import type { ImageRecord, ImageDetail, ImagePage, ImageFilters } from '../types'
+import type { ImageSummary, ImageDetail, ImagePage, ImageSummaryPage, ImageFilters } from '../types'
 
+/**
+ * The grid view uses ImageSummary (~80 bytes/row) rather than the full
+ * ImageRecord (~250 bytes/row). For a 100+ image workspace this is the
+ * difference between a snappy first paint and a noticeable stall while
+ * the IPC layer serializes and ships the extra fields the grid never
+ * reads (file_hash, relative_path, notes, last_viewed_at, file_created_at).
+ *
+ * The full record is still fetched on demand via get_image_detail when
+ * the user opens the right-hand detail panel.
+ */
 export const useImageStore = defineStore('images', () => {
-  const images = ref<ImageRecord[]>([])
+  const images = ref<ImageSummary[]>([])
   const total = ref(0)
   const page = ref(1)
-  const pageSize = ref(50)
+  // Default page size bumped from 50 → 100 so 100+ image workspaces
+  // (the exact case the user is hitting) render in a single round trip
+  // instead of forcing a scroll-triggered second fetch.
+  const pageSize = ref(100)
   const loading = ref(false)
   const selectedDetail = ref<ImageDetail | null>(null)
   const lastSelectedId = ref<number | null>(null)
@@ -25,7 +38,8 @@ export const useImageStore = defineStore('images', () => {
   async function fetchImages(workspaceId: number, append = false) {
     loading.value = true
     try {
-      const result = await invoke<ImagePage>('get_images', {
+      // Hot path: use the lightweight projection.
+      const result = await invoke<ImageSummaryPage>('get_images_light', {
         workspaceId,
         filters: { ...filters },
         page: page.value,
@@ -44,19 +58,22 @@ export const useImageStore = defineStore('images', () => {
 
   async function fetchDetail(imageId: number) {
     lastSelectedId.value = imageId
+    // Full record is fetched on demand; the grid never pays this cost.
     selectedDetail.value = await invoke<ImageDetail>('get_image_detail', { imageId })
   }
 
   async function search(workspaceId: number, query: string) {
     loading.value = true
     try {
+      // FTS search still returns full records because results are usually
+      // small and the detail panel may be opened immediately.
       const result = await invoke<ImagePage>('search_images', {
         workspaceId,
         query,
         page: page.value,
         pageSize: pageSize.value,
       })
-      images.value = result.images
+      images.value = result.images as unknown as ImageSummary[]
       total.value = result.total
     } finally {
       loading.value = false

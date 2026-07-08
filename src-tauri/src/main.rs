@@ -39,6 +39,7 @@ fn main() {
             commands::scan::scan_workspace,
             commands::scan::rescan_workspace,
             commands::images::get_images,
+            commands::images::get_images_light,
             commands::images::get_image_detail,
             commands::images::search_images,
             commands::images::find_duplicates,

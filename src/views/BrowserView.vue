@@ -60,30 +60,30 @@ onMounted(async () => {
     selection.clear()
     workspaceStore.select(workspaceId.value)
 
-    // Load workspace and images FIRST — these block the initial render
-    await Promise.all([
-      workspaceStore.fetchAll(),
-      imageStore.fetchImages(workspaceId.value),
-    ])
+    // The workspace list is now cached (single-flight), so this only
+    // hits the DB the first time the user navigates within a session.
+    // Previously this was an unconditional `await` that blocked
+    // render on every workspace switch.
+    workspaceStore.fetchAll()
 
-    // Defer tag loading: tags are only used in the sidebar filter, which is secondary UI.
-    // Loading them here keeps the sidebar responsive but doesn't delay image rendering.
+    // Load images first — this is the critical path that the user
+    // sees. Tags and workspace-list refresh happen in the background.
+    await imageStore.fetchImages(workspaceId.value)
+
+    // Tag loading is now safe to fire-and-forget: the store dedupes
+    // concurrent calls and only hits the DB once per workspace.
     tagStore.fetchTags(workspaceId.value)
 
     unlistenScan = await listen<ScanProgress>('scan-progress', (event) => {
       scanProgress.value = event.payload
       if (!event.payload.finished) {
-        // Only show the scan overlay when we've confirmed a scan is actually running.
-        // This avoids getting stuck with a permanently visible overlay when
-        // scan-progress events were emitted before the listener was registered,
-        // or when the workspace is simply empty with no scan in progress.
         scanning.value = true
       } else {
         scanning.value = false
         imageStore.fetchImages(workspaceId.value)
-        tagStore.fetchTags(workspaceId.value)
-        // Pre-generate thumbnails in background for all images in this workspace
-        // so the user doesn't have to wait for on-demand generation during first view.
+        tagStore.fetchTags(workspaceId.value, true)
+        // Background pre-generate. Only fires after a real scan,
+        // not on every workspace open.
         invoke('generate_thumbnails_batch', {
           imageIds: imageStore.images.map(i => i.id),
         }).catch((e: any) =>
@@ -92,19 +92,18 @@ onMounted(async () => {
       }
     })
 
-    // Race condition catch-up: the scan may have finished between our initial
-    // fetchImages and listen() — in that window the finished event was emitted
-    // and missed, so the listener's finished branch (which loads images) never ran.
-    // Refresh images now to catch up.
-    if (imageStore.images.length === 0) {
+    // Race-condition catch-up. The previous version re-issued a
+    // second `fetchImages` and then unconditionally triggered
+    // `generate_thumbnails_batch` — that command makes the DB hold
+    // its connection through N file-existence checks plus a per-id
+    // query loop, which is what caused the post-open stutter on
+    // large workspaces. We now only re-fetch if the DB was clearly
+    // empty (genuine race), and we skip the background batch when
+    // the workspace was just opened (i.e. no scan is in progress).
+    if (imageStore.images.length === 0 && imageStore.total === 0 && !scanning.value) {
       await imageStore.fetchImages(workspaceId.value)
       if (imageStore.images.length > 0) {
-        tagStore.fetchTags(workspaceId.value)
-        invoke('generate_thumbnails_batch', {
-          imageIds: imageStore.images.map(i => i.id),
-        }).catch((e: any) =>
-          console.warn('[BrowserView] catch-up thumbnail generation failed:', e)
-        )
+        tagStore.fetchTags(workspaceId.value, true)
       }
     }
   } catch (e) {
@@ -185,7 +184,7 @@ onUnmounted(() => {
           :workspace-id="workspaceId"
           :select-mode="selectMode"
           @select-detail="(id: number) => imageStore.fetchDetail(id)"
-          @refresh="async () => { imageStore.setPage(1); await imageStore.fetchImages(workspaceId); await tagStore.fetchTags(workspaceId) }"
+          @refresh="async () => { imageStore.setPage(1); await imageStore.fetchImages(workspaceId); await tagStore.fetchTags(workspaceId, true) }"
           @view-fullscreen="openFullscreen"
           @show-toast="showToast"
         />
@@ -253,7 +252,6 @@ onUnmounted(() => {
 }
 .detail-wrapper.collapsed { width: 0; }
 
-/* Panel content fades with collapse */
 .panel-content {
   flex: 1;
   min-width: 0;
@@ -267,7 +265,6 @@ onUnmounted(() => {
   transition: opacity 0.08s ease;
 }
 
-/* ── Edge toggle button ── */
 .edge-toggle {
   position: relative;
   width: 28px;
