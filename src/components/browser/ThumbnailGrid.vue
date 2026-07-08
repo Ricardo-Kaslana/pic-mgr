@@ -550,7 +550,8 @@ defineExpose({ scrollToImage, locateAndFlash })
 </script>
 
 <template>
-  <div ref="containerRef" class="thumb-grid" @scroll="onScroll" @click="closeContextMenu" @contextmenu.prevent>
+  <div class="thumb-grid-outer">
+    <div ref="containerRef" class="thumb-grid" @scroll="onScroll" @click="closeContextMenu" @contextmenu.prevent>
     <div class="grid-sizer" :style="{ height: `${totalHeight}px` }">
       <div
         v-for="vi in visibleItems"
@@ -583,10 +584,35 @@ defineExpose({ scrollToImage, locateAndFlash })
       </div>
     </div>
 
-    <!-- Floating scroll FABs. Sibling of .grid-sizer so they do
-         NOT scroll with the content; position: absolute inside
-         .thumb-grid keeps them pinned to the viewport corner and
-         clipped by the scroll container's overflow. -->
+    <!-- Context Menu -->
+    <Teleport to="body">
+      <div
+        v-if="contextMenu.visible"
+        class="context-menu"
+        role="menu"
+        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+      >
+        <button role="menuitem" @click="openInExplorer"><span class="ctx-icon">📂</span>{{ t('context.openExplorer') }}</button>
+        <button role="menuitem" @click="copyPath"><span class="ctx-icon">📋</span>{{ t('context.copyPath') }}</button>
+        <button role="menuitem" @click="moveFile"><span class="ctx-icon">📁</span>{{ t('context.moveFile') }}</button>
+        <button role="menuitem" @click="moveToWorkspace"><span class="ctx-icon">🗂️</span>{{ t('context.moveToWorkspace') }}</button>
+        <div class="context-divider"></div>
+        <button role="menuitem" class="danger" @click="removeFromWorkspace"><span class="ctx-icon">🗑️</span>{{ t('context.removeFromWorkspace') }}</button>
+        <button role="menuitem" class="danger" @click="trashFile"><span class="ctx-icon">🗑️</span>{{ t('context.moveToTrash') }}</button>
+      </div>
+      <MoveToWorkspaceDialog
+        v-if="showWorkspacePicker"
+        :current-workspace-id="props.workspaceId"
+        @select="handleWorkspaceSelected"
+        @close="showWorkspacePicker = false"
+      />
+    </Teleport>
+    </div>
+
+    <!-- Floating scroll FABs. Positioned absolute inside
+         .thumb-grid-outer (which does NOT scroll), so the
+         buttons stay pinned to the visible viewport area
+         regardless of .thumb-grid content scroll. -->
     <div v-show="scrollInfo.canScroll" class="scroll-fab" aria-label="Scroll navigation">
       <button
         class="scroll-fab-btn"
@@ -613,48 +639,29 @@ defineExpose({ scrollToImage, locateAndFlash })
         </svg>
       </button>
     </div>
-    <!-- Context Menu -->
-    <Teleport to="body">
-      <div
-        v-if="contextMenu.visible"
-        class="context-menu"
-        role="menu"
-        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
-      >
-        <button role="menuitem" @click="openInExplorer"><span class="ctx-icon">📂</span>{{ t('context.openExplorer') }}</button>
-        <button role="menuitem" @click="copyPath"><span class="ctx-icon">📋</span>{{ t('context.copyPath') }}</button>
-        <button role="menuitem" @click="moveFile"><span class="ctx-icon">📁</span>{{ t('context.moveFile') }}</button>
-        <button role="menuitem" @click="moveToWorkspace"><span class="ctx-icon">🗂️</span>{{ t('context.moveToWorkspace') }}</button>
-        <div class="context-divider"></div>
-        <button role="menuitem" class="danger" @click="removeFromWorkspace"><span class="ctx-icon">🗑️</span>{{ t('context.removeFromWorkspace') }}</button>
-        <button role="menuitem" class="danger" @click="trashFile"><span class="ctx-icon">🗑️</span>{{ t('context.moveToTrash') }}</button>
-      </div>
-      <MoveToWorkspaceDialog
-        v-if="showWorkspacePicker"
-        :current-workspace-id="props.workspaceId"
-        @select="handleWorkspaceSelected"
-        @close="showWorkspacePicker = false"
-      />
-    </Teleport>
   </div>
 </template>
 
 <style scoped>
-.thumb-grid {
+/* ── Scroll-fab wrapper: takes flex space, anchors absolute FAB ── */
+.thumb-grid-outer {
   flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.thumb-grid {
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px 12px;
-  /* Required so the absolutely-positioned .scroll-fab children are
-     pinned to the visible viewport area instead of escaping up the
-     flex / DOM tree. */
-  position: relative;
 }
 
 /* ── Floating scroll FABs ──
-   Sits inside .thumb-grid and is clipped by its overflow: auto
-   boundary, which is exactly what we want: the buttons track the
-   scroll container's visible area, never the scrolled content. */
+   Positioned absolute inside .thumb-grid-outer (which does NOT
+   scroll), so the buttons stay pinned to the visible viewport
+   area regardless of .thumb-grid content scroll. */
 
 .grid-sizer {
   position: relative;
@@ -663,8 +670,8 @@ defineExpose({ scrollToImage, locateAndFlash })
 
 .scroll-fab {
   position: absolute;
-  right: 18px;
-  bottom: 22px;
+  right: 30px;   /* 18px + 12px (.thumb-grid right padding) */
+  bottom: 30px;  /* 22px +  8px (.thumb-grid bottom padding) */
   display: flex;
   flex-direction: column;
   gap: 8px;

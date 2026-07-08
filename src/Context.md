@@ -56,7 +56,7 @@ components/
 - **内存管理** — 滚动离开可视区后调用 `thumbStore.revoke` 让 LRU 决定是否 revoke；`evictAllThumbUrls` 只 revoke 不在 store cache 里的孤儿 URL
 - **缩略图 batch 调度** — 视口内前 60 个 ID 进 priority batch（单 IPC），其余进 4 路并发 fallback；视口下方 6 行预取区防止滚动时出现骨架屏
 - **虚拟滚动** — 自适应网格布局，按行计算可见区域；`onScroll` 在 65% 处预加载下一页
-- **悬浮滚动按钮** - 缩略图网格右下角浮动回到顶部 / 回到底部圆形按钮；位置阈值 300px (常量 SCROLL_FAB_THRESHOLD)；visible 状态由单个 ref({ canScroll, scrollTop, distanceFromBottom }) 反应式袋子驱动，在 onScroll / ResizeObserver / watch(totalHeight) 三个时机由 updateScrollInfo() 助手更新；与 .grid-sizer 同级，被 .thumb-grid 的 overflow: auto 裁剪
+- **悬浮滚动按钮** - 缩略图网格右下角浮动回到顶部 / 回到底部圆形按钮；位置阈值 300px (常量 SCROLL_FAB_THRESHOLD)；visible 状态由单个 ref({ canScroll, scrollTop, distanceFromBottom }) 反应式袋子驱动，在 onScroll / ResizeObserver / watch(totalHeight) 三个时机由 updateScrollInfo() 助手更新；位于 .thumb-grid-outer 内、.thumb-grid 外，position: absolute 相对于不滚动的 wrapper，确保按钮始终固定在视口
 - **分页追加** — `fetchImages(id, append=true)` 翻页时追加而非替换，默认 `pageSize=100`
 - **主题** — CSS 变量 + `[data-theme]` 属性切换
 - **i18n** — vue-i18n，语言切换同步到 localStorage
