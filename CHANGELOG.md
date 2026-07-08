@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.4] -- 2026-07-08
+
+### Added
+
+- **Floating scroll FABs in the thumbnail grid**: Two circular buttons anchored to the bottom-right corner of the grid. "Scroll to Top" appears when the user is more than 300 px from the top, "Scroll to Bottom" appears when more than 300 px from the bottom. Each button smoothly slides + fades in / out, supports smooth-scroll, and respects the existing edge-toggle / accent-glow design language. Hidden entirely on workspaces short enough to fit in one viewport. Zero impact on the hot path: state is read once per scroll event and once on resize / pagination append, no per-frame work.
+
+### Changed
+
+- **.thumb-grid is now position: relative** so absolutely-positioned FAB children stay clipped to the scroll viewport (the existing .grid-sizer { position: relative } still anchors the absolutely-positioned grid cells, so cell layout is unchanged).
+
 ## [0.3.3] — 2026-07-08
 
 ### Optimized

@@ -102,6 +102,10 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 - **排序控制** 网格头部下拉菜单，支持文件名/收录时间/修改时间/创建时间；点击切换升降序；`queries.rs` 的 `sort_col` match 动态映射
 - **快速定位** 详情面板打开时自动滚动网格到选中图片（nextTick + 80ms 等待布局回流），accent 发光边框高亮；详情面板头部 ⌖ 按钮手动触发
 - **面板折叠** 侧栏和详情面板可完全收起（width→0），28px 圆形切换按钮浮在面板边缘；hover 浮现 + accent 发光；SVG chevron 图标；选中图片时自动展开详情面板
+- **悬浮滚动按钮** 缩略图网格右下角浮动 `回到顶部` / `回到底部` 圆形按钮（v0.3.4+）。
+  - .scroll-fab 与 .grid-sizer 同级，是 .thumb-grid 的直接子元素；.thumb-grid 设了 position: relative 才能让绝对定位 FAB 钉在可视区域，被 overflow: auto 边界裁剪。
+  - 单个 ref({ canScroll, scrollTop, distanceFromBottom }) 反应式袋子，由 updateScrollInfo() 助手在 onScroll / ResizeObserver / watch(totalHeight) 三个时机更新；不拆成多个 ref，避免多余 reactivity 开销。
+  - 阈值 300px 通过模块顶部常量 SCROLL_FAB_THRESHOLD 暴露给模板（不在模板里写魔法数字）
 
 ## 已知限制
 

@@ -288,6 +288,7 @@ let highestRequestedPage = 1
 function onScroll(e: Event) {
   const el = e.target as HTMLElement
   scrollTop.value = el.scrollTop
+  updateScrollInfo()
 
   // Pre-load next page when 65% scrolled. The previous threshold
   // (within 500px of bottom) was too late: by the time the user hit
@@ -442,8 +443,10 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(entries => {
       containerWidth.value = entries[0].contentRect.width
       containerHeight.value = entries[0].contentRect.height
+      updateScrollInfo()
     })
     resizeObserver.observe(containerRef.value)
+    updateScrollInfo()
   }
 })
 onUnmounted(() => {
@@ -477,6 +480,42 @@ async function locateAndFlash(imageId: number) {
   setTimeout(() => { flashId.value = null }, 1200)
 }
 
+// ── Floating scroll FAB state ──
+//
+// One reactive bag updated only inside onScroll / ResizeObserver /
+// totalHeight watcher — reading scrollHeight and clientHeight every
+// frame is cheap, but we don't want each call to fan out as a separate
+// ref change. The threshold (300px) matches the typical first-screen
+// height so the buttons stay tucked out of the way while the user is
+// reading the top of the grid.
+const SCROLL_FAB_THRESHOLD = 300
+const scrollInfo = ref({
+  canScroll: false,
+  scrollTop: 0,
+  distanceFromBottom: 0,
+})
+
+function updateScrollInfo() {
+  const el = containerRef.value
+  if (!el) return
+  const canScroll = el.scrollHeight > el.clientHeight + SCROLL_FAB_THRESHOLD
+  scrollInfo.value = {
+    canScroll,
+    scrollTop: el.scrollTop,
+    distanceFromBottom: el.scrollHeight - el.scrollTop - el.clientHeight,
+  }
+}
+
+function scrollToTop() {
+  containerRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function scrollToBottom() {
+  const el = containerRef.value
+  if (!el) return
+  el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+}
+
 // Reset scroll-pagination state on workspace switch so the next
 // pre-load pass starts from page 1.
 watch(() => props.workspaceId, () => {
@@ -488,7 +527,12 @@ watch(() => props.workspaceId, () => {
   if (thumbLoadTimer) { clearTimeout(thumbLoadTimer); thumbLoadTimer = null }
   evictAllThumbUrls()
   scrollTop.value = 0
+  nextTick(updateScrollInfo)
 })
+
+// Recompute FAB visibility when total content height changes
+// (pagination appends, items removed, thumb-size adjusted, etc.).
+watch(totalHeight, () => nextTick(updateScrollInfo))
 
 watch(() => imageStore.selectedDetail, async (detail, prev) => {
   if (detail) {
@@ -539,6 +583,36 @@ defineExpose({ scrollToImage, locateAndFlash })
       </div>
     </div>
 
+    <!-- Floating scroll FABs. Sibling of .grid-sizer so they do
+         NOT scroll with the content; position: absolute inside
+         .thumb-grid keeps them pinned to the viewport corner and
+         clipped by the scroll container's overflow. -->
+    <div v-show="scrollInfo.canScroll" class="scroll-fab" aria-label="Scroll navigation">
+      <button
+        class="scroll-fab-btn"
+        :class="{ visible: scrollInfo.scrollTop > SCROLL_FAB_THRESHOLD }"
+        :title="t('browser.scrollToTop')"
+        :aria-label="t('browser.scrollToTop')"
+        @click="scrollToTop"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 13V3" />
+          <path d="M3 8l5-5 5 5" />
+        </svg>
+      </button>
+      <button
+        class="scroll-fab-btn"
+        :class="{ visible: scrollInfo.distanceFromBottom > SCROLL_FAB_THRESHOLD }"
+        :title="t('browser.scrollToBottom')"
+        :aria-label="t('browser.scrollToBottom')"
+        @click="scrollToBottom"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3v10" />
+          <path d="M3 8l5 5 5-5" />
+        </svg>
+      </button>
+    </div>
     <!-- Context Menu -->
     <Teleport to="body">
       <div
@@ -571,11 +645,67 @@ defineExpose({ scrollToImage, locateAndFlash })
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px 12px;
+  /* Required so the absolutely-positioned .scroll-fab children are
+     pinned to the visible viewport area instead of escaping up the
+     flex / DOM tree. */
+  position: relative;
 }
+
+/* ── Floating scroll FABs ──
+   Sits inside .thumb-grid and is clipped by its overflow: auto
+   boundary, which is exactly what we want: the buttons track the
+   scroll container's visible area, never the scrolled content. */
 
 .grid-sizer {
   position: relative;
   width: 100%;
+}
+
+.scroll-fab {
+  position: absolute;
+  right: 18px;
+  bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 5;
+}
+.scroll-fab-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateY(8px) scale(0.85);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.22s var(--ease-spring),
+              background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+              box-shadow 0.15s ease;
+}
+.scroll-fab-btn.visible {
+  opacity: 0.92;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.scroll-fab-btn.visible:hover {
+  opacity: 1;
+  background: var(--bg-secondary);
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md), 0 0 12px var(--accent-glow);
+  transform: translateY(-2px) scale(1.05);
+}
+.scroll-fab-btn.visible:active {
+  transform: scale(0.92);
+  transition: transform 0.1s ease;
 }
 
 .grid-cell {

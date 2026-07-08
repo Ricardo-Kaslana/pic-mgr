@@ -58,6 +58,8 @@ export default {
     exportFailed: 'Export failed: {error}',
     locateLast: 'Locate',
     backToWorkspaces: 'Back to workspaces',
+    scrollToTop: 'Scroll to Top',
+    scrollToBottom: 'Scroll to Bottom',
     scanning: 'Scanning... {processed}/{total}',
   },
   sidebar: {
