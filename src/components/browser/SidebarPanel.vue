@@ -35,8 +35,10 @@ function clearFilters() {
 
 <template>
   <div class="sidebar-panel">
-    <SearchBar :workspace-id="workspaceId" />
-    <div class="section-divider"></div>
+    <div class="search-section">
+      <SearchBar :workspace-id="workspaceId" />
+      <div class="section-divider"></div>
+    </div>
     <TagFilter />
     <div class="filter-actions">
       <button class="apply-btn" @click="fetchWithFilters">{{ t('sidebar.apply') }}</button>
@@ -53,6 +55,23 @@ function clearFilters() {
   background: var(--bg-secondary);
   padding: 14px;
   overflow-y: auto;
+}
+/* The search section (SearchBar + section-divider) is sized to match the
+   brand area's height so its divider line aligns with the brand area's
+   border-bottom. Brand area / toolbar height = 71px (expanded) / 55px (collapsed).
+   panel padding-top = 14px. So search-section height = brand height - 14. */
+.search-section {
+  height: 57px; /* 71 - 14, expanded */
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px; /* preserve the gap between the divider and TagFilter below */
+}
+.app-layout.collapsed .search-section {
+  height: 41px; /* 55 - 14, collapsed */
+}
+.search-section .section-divider {
+  margin: 0;
+  margin-top: auto; /* push the divider to the bottom of the flex container */
 }
 .section-divider {
   height: 1px;

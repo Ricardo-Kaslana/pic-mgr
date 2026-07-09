@@ -229,10 +229,17 @@ async function batchMove() {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px 0;
-  padding: 28px 16px 10px 16px;
+  padding: 24px 16px 18px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
+
+/* Collapse-aware alignment: brand area is 55px when .app-layout.collapsed
+   (16+22+16+1), so top bar drops to the same height. */
+.app-layout.collapsed .grid-header {
+  padding: 16px 16px 10px 16px;
+}
+
 .image-count { padding: 5px 10px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); white-space: nowrap; }
 .header-left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 6px; }
 

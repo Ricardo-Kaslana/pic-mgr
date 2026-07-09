@@ -1,4 +1,10 @@
 
+## [0.3.13] — 2026-07-10
+
+### Fixed
+
+- **Aligned 3 top-of-column areas in browser view**: the outer sidebar brand area (`.sidebar-brand` in AppLayout), the inner sidebar search section (`.search-section` in SidebarPanel), and the main grid header (`.grid-header` in GridToolbar) now share a single horizontal bottom edge in both expanded and collapsed states. `GridToolbar.vue` `.grid-header` padding tuned to `24px 16px 18px 16px` (67px tall) expanded and `16px 16px 10px 16px` (51px tall) collapsed — toolbar deliberately sits ~4px shorter than brand/search for visual hierarchy (brand area remains 71px/55px as the dominant block). `SidebarPanel.vue` wraps `<SearchBar>` and `.section-divider` in a `.search-section` flex container with `height: 57px` expanded / `41px` collapsed; the divider uses `margin-top: auto` inside `flex-direction: column` to pin its 1px line to the section bottom, which lands at y = panel padding-top + section height = 71px/55px (matching brand area border-bottom). AGENTS.md gains an alignment-formula invariant so future tweaks stay synchronized across the three components.
+
 
 ## [0.3.12] — 2026-07-10
 
