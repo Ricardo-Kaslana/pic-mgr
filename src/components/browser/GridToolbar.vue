@@ -196,12 +196,12 @@ async function batchMove() {
             <button role="menuitem" @click="exportMetadata('csv')">CSV</button>
           </div>
         </div>
-        <button class="toolbar-btn active" @click="toggleSelectMode">{{ t('browser.done') }}</button>
+        <button class="toolbar-btn primary" @click="toggleSelectMode">{{ t('browser.done') }}</button>
       </template>
       <template v-else>
         <button
           v-if="imageStore.lastSelectedId != null"
-          class="toolbar-btn locate-btn"
+          class="toolbar-btn primary"
           :title="t('browser.locateLast')"
           @click="emit('locateLast')"
         >
@@ -312,24 +312,27 @@ async function batchMove() {
 }
 .toolbar-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--text-muted); }
 .toolbar-btn:active { background: var(--border); }
-.toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-.toolbar-btn.active:hover { background: var(--accent-hover); }
-.toolbar-btn.active:active { opacity: 0.9; }
-.toolbar-btn.danger { color: var(--danger); border-color: transparent; }
-.toolbar-btn.danger:hover { background: var(--danger-bg); border-color: var(--danger); }
-.toolbar-btn.danger:active { opacity: 0.8; }
-.toolbar-btn.locate-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+/* Toolbar button variants: same shape, padding, border treatment.
+   Differ only by text + border color. Hover fills with the variant color. */
+.toolbar-btn.primary {
   color: var(--accent);
   border-color: var(--accent);
-  background: var(--accent-bg);
+  font-weight: 600;
 }
-.toolbar-btn.locate-btn:hover {
+.toolbar-btn.primary:hover {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+}
+.toolbar-btn.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  font-weight: 600;
+}
+.toolbar-btn.danger:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
 }
 .export-dropdown { position: relative; }
 .export-menu {
