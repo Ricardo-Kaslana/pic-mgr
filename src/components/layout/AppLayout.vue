@@ -146,14 +146,14 @@ function goSettings() { router.push('/settings') }
   border-color: var(--border);
 }
 .sidebar-toggle:active { opacity: 0.7; }
-.app-layout.collapsed .sidebar-toggle { transform: rotate(180deg); }
+.app-layout.collapsed .sidebar-toggle { width: 22px; height: 22px; transform: rotate(180deg); }
 
 .app-layout.collapsed .sidebar-brand {
-  padding: 16px 0;
+  padding: 16px 0 16px 14px;
   gap: 0;
   justify-content: space-between;
 }
-.app-layout.collapsed .brand-icon { width: 28px; height: 28px; }
+.app-layout.collapsed .brand-icon { width: 22px; height: 22px; }
 .app-layout.collapsed .brand-text {
   opacity: 0;
   width: 0;
