@@ -62,7 +62,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
 
     try {
-      const progress = await invoke<ScanProgress>('scan_workspace', { id })
+      const progress = await invoke<ScanProgress>('rescan_workspace', { id })
       scanProgress.value = progress
       return progress
     } finally {
