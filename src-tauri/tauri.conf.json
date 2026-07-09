@@ -13,9 +13,10 @@
     "windows": [
       {
         "title": "PicMgr — 本地图片管理器",
-        "width": 1200,
-        "height": 800,
+        "width": 1080,
+        "height": 720,
         "resizable": true,
+        "center": true,
         "fullscreen": false,
         "additionalBrowserArgs": "--disable-gpu"
       }
