@@ -5,6 +5,7 @@ export default {
   nav: {
     home: 'Workspaces',
     settings: 'Settings',
+    toggleSidebar: 'Toggle sidebar',
   },
   workspace: {
     title: 'Workspaces',

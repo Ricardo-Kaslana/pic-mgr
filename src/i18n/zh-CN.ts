@@ -5,6 +5,7 @@ export default {
   nav: {
     home: '工作区',
     settings: '设置',
+    toggleSidebar: '切换侧栏',
   },
   workspace: {
     title: '工作区',
