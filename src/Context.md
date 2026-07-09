@@ -34,6 +34,7 @@ components/
     WorkspaceCard.vue        — 工作区卡片
     CreateWorkspaceDialog.vue — 新建工作区弹窗
   browser/
+    GridToolbar.vue          — 顶部工具栏（flex-wrap 自适应；按钮统一为 .toolbar-btn / .primary / .danger 三种 outlined 形态，hover 填充对应色）
     ThumbnailGrid.vue        — 虚拟滚动缩略图网格 (shallowRef thumbUrls, smart scroll)
     SidebarPanel.vue         — 搜索 + 标签筛选侧栏
     SearchBar.vue            — 防抖搜索输入

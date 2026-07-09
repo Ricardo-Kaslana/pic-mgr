@@ -1,4 +1,25 @@
 
+## [0.3.6] — 2026-07-09
+
+### Changed
+
+- **Collapsed sidebar icon polish** (continuation of `[0.3.5]`): Three iterations to align icons in the 64px collapsed sidebar at the same `x=14` left-edge line. Tighter button padding so icons no longer float in bloated rectangles; theme toggle bg switched from always-on `var(--bg-tertiary)` to transparent-by-default / grey-on-hover (matches `.nav-item` behavior); brand-icon and toggle scaled down to 22×22 (matching `.nav-icon` scale) so all four icons share a 22–28px visual range with consistent left alignment.
+
+- **Toolbar responsive layout**: `GridToolbar.vue` now wraps gracefully when horizontal space is tight. Three `.grid-header` / `.header-left` / `.header-actions` flex containers gained `flex-wrap: wrap` plus `gap: <row> <col>` shorthand — when narrow, items drop to a second line instead of overflowing into the grid area below. Left group (back / count / sort) stays single-line; right group splits to 2 lines in select mode. Single-row layout unchanged for normal widths.
+
+- **Toolbar button variant unification**: Three previously-divergent button looks (`.toolbar-btn.active` solid-fill, `.toolbar-btn.locate-btn` tinted-bg + accent outline, default bordered) collapsed into one outlined system: same shape / padding / border-radius across all variants, differing only in **text + border color**:
+  - `.toolbar-btn` — bordered neutral (most actions: 全选, 移动, 排序, 导出)
+  - `.toolbar-btn.primary` — bordered accent (the per-mode main CTA: 完成 / 定位 pre-unification)
+  - `.toolbar-btn.danger` — bordered danger (删除)
+  Hover state consistently **fills with the variant color** across all three. Both `.toolbar-btn.active` and `.toolbar-btn.locate-btn` rules removed.
+
+- **定位 demoted to default style**: With the unification above, the locate button lost its redundant SVG icon and its primary-class, becoming a plain bordered-neutral text button identical in look to 全选 / 移动. Functional click handler unchanged (`emit('locateLast')` still scrolls to / flashes the last-selected image). Reduces visual emphasis on a conditional button that pops in/out based on `lastSelectedId != null`.
+
+### Fixed
+
+- **In-page sidebar fold button clipped after collapse** (BrowserView): `.edge-toggle.sidebar-edge` used `margin-left: -14px; margin-right: -14px` to straddle the sidebar-grid boundary for the visual "tab on the edge" effect. When the sidebar collapsed to `width: 0`, the button's slot shifted to `x=0` of `.browser` and the `-14px` left margin pulled the button's left half **outside** `.browser` — straight into AppLayout's `.main-content` whose `overflow: hidden` clipped it. Now `.sidebar-wrapper.collapsed .sidebar-edge` (and the symmetric `.detail-wrapper.collapsed .detail-edge`) reset both margins to `0`, keeping the button fully inside `.browser`. Added `margin 0.25s cubic-bezier(0.4, 0, 0.2, 1)` to `.edge-toggle` transition list so the reset is animated, not snapped, in sync with the wrapper's width transition.
+
+
 ## [0.3.5] — 2026-07-09
 
 ### Added
