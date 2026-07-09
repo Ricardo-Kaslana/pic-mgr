@@ -186,6 +186,7 @@ onUnmounted(() => {
         <GridToolbar
           v-model:select-mode="selectMode"
           :workspace-id="workspaceId"
+          :workspace-name="workspaceStore.current?.name ?? ''"
           @show-toast="showToast"
           @show-dedup="showDedup = true"
           @locate-last="locateImage"

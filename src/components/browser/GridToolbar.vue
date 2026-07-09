@@ -9,7 +9,7 @@ import { useImageStore } from '../../stores/images'
 import { useSelectionStore } from '../../stores/selection'
 import { useTagStore } from '../../stores/tags'
 
-const props = defineProps<{ workspaceId: number }>()
+const props = defineProps<{ workspaceId: number; workspaceName?: string }>()
 const emit = defineEmits<{
   showToast: [msg: string]
   showDedup: []
@@ -154,6 +154,7 @@ async function batchMove() {
           <path d="M10 2L4 8l6 6"/>
         </svg>
       </button>
+      <span class="workspace-name" v-if="props.workspaceName">{{ props.workspaceName }}</span>
       <span class="image-count">{{ t('browser.imageCount', { count: imageStore.total }) }}</span>
       <div class="sort-dropdown">
         <button class="toolbar-btn sort-btn" aria-haspopup="listbox" :aria-expanded="showSortMenu" @click="showSortMenu = !showSortMenu">
@@ -244,6 +245,7 @@ async function batchMove() {
   border-radius: var(--radius-sm);
 }
 .back-btn svg { flex-shrink: 0; }
+.workspace-name { font-size: 13px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 4px; }
 .btn-group { display: flex; align-items: center; gap: 4px; }
 .divider { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
