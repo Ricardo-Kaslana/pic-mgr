@@ -282,10 +282,13 @@ onUnmounted(() => {
   align-self: center;
   padding: 0;
   opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), margin 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.sidebar-edge { margin-left: -14px; margin-right: -14px; }
+.sidebar-edge,
 .detail-edge { margin-left: -14px; margin-right: -14px; }
+/* Reset negative margins when parent wrapper is collapsed, otherwise button straddles into main-content overflow clip zone */
+.sidebar-wrapper.collapsed .sidebar-edge,
+.detail-wrapper.collapsed .detail-edge { margin-left: 0; margin-right: 0; }
 .edge-toggle.at-edge { opacity: 1; }
 .browser:hover .edge-toggle:not(.at-edge) { opacity: 1; }
 .edge-toggle:hover { opacity: 1; }
