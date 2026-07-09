@@ -24,7 +24,7 @@ stores/
 
 views/
   WorkspaceHome.vue  — 工作区列表页
-  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠；inner SidebarPanel 折叠状态跨会话持久化到 localStorage)
+  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠；inner SidebarPanel 折叠状态跨会话持久化到 localStorage；排序方式持久化到 useSettingsStore)
   DedupView.vue      — 重复图片检测 (作为 BrowserView 子组件)
   SettingsPage.vue   — 设置页
 
@@ -46,7 +46,7 @@ components/
     ImageInfo.vue            — 只读文件信息（3 个日期 + 复制文件名）—— 接收 ImageRecord
   common/
     TagBadge.vue             — 标签胶囊组件
-    LightboxViewer.vue       — 全屏大图查看（双击触发，← → 翻页，Escape 关闭）—— 接收 ImageSummary[]
+    LightboxViewer.vue       — 全屏大图查看（双击缩略图或 hover 显形的左上角展开按钮触发，← → 翻页，Escape 关闭）—— 接收 ImageSummary[]
 ```
 
 ## Key patterns
@@ -63,6 +63,6 @@ components/
 - **i18n** — vue-i18n，语言切换同步到 localStorage
 - **右键菜单** — Teleport 到 body 的 context menu，支持打开/复制/移动/移除/删除
 - **导出** — JSON/CSV 格式导出，通过 Blob + URL.createObjectURL 下载
-- **交互模式** — 单击查看详情；双击查看大图（全屏原图）；"选择"按钮进入选择模式（点击选中，全选/取消全选/删除/移动/导出），Escape 退出
+- **交互模式** — 单击查看详情；双击缩略图或点击 hover 显形的展开按钮查看大图（全屏原图）；"选择"按钮进入选择模式（点击选中，全选/取消全选/删除/移动/导出），Escape 退出
 - **工作区删除错误处理** — `WorkspaceHome.vue` 用 `try/catch` 包裹 `store.remove()`，错误通过红色 dismissible banner 显示（i18n key: `workspace.deleteFailed`）
 - **Stores 缓存** — `workspaceStore.fetchAll` 单飞 + 缓存；`tagStore.fetchTags` 单飞 + per-workspace 缓存；避免 BrowserView/SidebarPanel 重复 IPC
