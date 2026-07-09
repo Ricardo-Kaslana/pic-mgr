@@ -100,6 +100,9 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 - **从工作区移除** 仅删除 DB 记录，不碰磁盘文件（原有行为不变）
 - **大图查看** 双击缩略图或点击 hover 显形的展开按钮 → LightboxViewer 全屏，`read_file_bytes` 命令读原文件 → blob URL 显示；← → 键翻页，Escape 关闭
 - **按钮系统** 统一 btn-primary/secondary/ghost/danger + btn-sm/md/lg + btn-icon/pill 体系，全局一致 hover/active/disabled 三态反馈
+
+- **工作区名称** GridToolbar 在返回按钮和图片计数之间以粗体显示当前工作区名称（workspaceName prop，来自 workspaceStore.current?.name），最大宽度 260px 超出省略号截断；GridToolbar 不与 workspace store 耦合
+
 - **排序控制** 网格头部下拉菜单，支持文件名/收录时间/修改时间/创建时间；点击切换升降序；`queries.rs` 的 `sort_col` match 动态映射；排序列与方向跨会话持久化到 `useSettingsStore.sortBy` / `sortDir` (`pic-mgr-sort-by` / `pic-mgr-sort-dir`)
 - **快速定位** 详情面板打开时自动滚动网格到选中图片（nextTick + 80ms 等待布局回流），accent 发光边框高亮；详情面板头部 ⌖ 按钮手动触发
 - **面板折叠** 侧栏和详情面板可完全收起（width→0），28px 圆形切换按钮浮在面板边缘；hover 浮现 + accent 发光；SVG chevron 图标；选中图片时自动展开详情面板；工作区内层 SidebarPanel 折叠状态跨会话持久化（通过 `useSettingsStore.browserSidebarCollapsed`，由 `useLocalStorage` 统一写入 `pic-mgr-browser-sidebar-collapsed`）

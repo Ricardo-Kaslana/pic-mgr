@@ -26,7 +26,7 @@ composables/         — useLocalStorage (localStorage ref+watch 泛型封装)�
 
 views/
   WorkspaceHome.vue  — 工作区列表页（重新扫描调用 rescan_workspace，清除已删除图片的孤立 DB 记录）
-  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠；inner SidebarPanel 折叠状态跨会话持久化到 localStorage；排序方式持久化到 useSettingsStore)
+  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠；inner SidebarPanel 折叠状态跨会话持久化到 localStorage；排序方式持久化到 useSettingsStore；传递 `:workspace-name="workspaceStore.current?.name"` 给 GridToolbar)
   DedupView.vue      — 重复图片检测 (作为 BrowserView 子组件)
   SettingsPage.vue   — 设置页
 
@@ -36,7 +36,7 @@ components/
     WorkspaceCard.vue        — 工作区卡片
     CreateWorkspaceDialog.vue — 新建工作区弹窗
   browser/
-    GridToolbar.vue          — 顶部工具栏（flex-wrap 自适应；按钮统一为 .toolbar-btn / .primary / .danger 三种 outlined 形态，hover 填充对应色）
+    GridToolbar.vue          — 顶部工具栏（workspaceName prop 显示工作区名称；flex-wrap 自适应；按钮统一为 .toolbar-btn / .primary / .danger 三种 outlined 形态，hover 填充对应色）
     ThumbnailGrid.vue        — 虚拟滚动缩略图网格 (shallowRef thumbUrls, smart scroll；每张图左上角 hover 显形的展开按钮，单击全屏)
     SidebarPanel.vue         — 搜索 + 标签筛选侧栏
     SearchBar.vue            — 防抖搜索输入

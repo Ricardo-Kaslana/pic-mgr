@@ -1,5 +1,11 @@
 
 
+## [0.3.12] — 2026-07-10
+
+### Added
+
+- **Workspace name in toolbar**: GridToolbar now displays the current workspace name as a bold ellipsized label between the back button and image count. The name is passed as a prop (workspaceName?: string) from BrowserView (workspaceStore.current?.name), keeping GridToolbar decoupled from the workspace store. Max-width 260px with text ellipsis for long names.
+
 ## [0.3.11] — 2026-07-10
 
 ### Fixed
