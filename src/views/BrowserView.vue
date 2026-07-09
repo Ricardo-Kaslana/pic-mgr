@@ -29,8 +29,15 @@ const workspaceId = computed(() => Number(route.params.id))
 const selectMode = ref(false)
 const showDedup = ref(false)
 const gridRef = ref<InstanceType<typeof ThumbnailGrid> | null>(null)
-const sidebarCollapsed = ref(false)
+const sidebarCollapsed = ref<boolean>(
+  localStorage.getItem('pic-mgr-browser-sidebar-collapsed') === 'true'
+)
 const detailCollapsed = ref(false)
+
+watch(sidebarCollapsed, (v) => {
+  localStorage.setItem('pic-mgr-browser-sidebar-collapsed', String(v))
+}, { immediate: true })
+
 const scanning = ref(false)
 const scanProgress = ref<ScanProgress | null>(null)
 let unlistenScan: (() => void) | null = null

@@ -1,4 +1,10 @@
 
+## [0.3.7] — 2026-07-09
+
+### Added
+
+- **Browser sidebar collapse state persists across launches**: `BrowserView.vue`'s inner `SidebarPanel` wrapper collapse state (the in-page sidebar holding tag filters / workspace info, toggled by the `edge-toggle` chevron button inside the workspace) now persists via `pic-mgr-browser-sidebar-collapsed` in localStorage. Same `localStorage + watch({ immediate: true })` pattern used by the outer nav sidebar (`pic-mgr-sidebar-collapsed`), `theme`, `thumbnailSize`, and `language`. Inner sidebar now opens collapsed or expanded to match the user's last choice instead of resetting to expanded on every launch. The right-side detail panel still resets to expanded on each launch ( its `if (detail) detailCollapsed.value = false` watcher overrides the persisted value when an image is selected, which is intentional behavior).
+
 ## [0.3.6] — 2026-07-09
 
 ### Changed

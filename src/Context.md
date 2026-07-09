@@ -24,7 +24,7 @@ stores/
 
 views/
   WorkspaceHome.vue  — 工作区列表页
-  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠)
+  BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠；inner SidebarPanel 折叠状态跨会话持久化到 localStorage)
   DedupView.vue      — 重复图片检测 (作为 BrowserView 子组件)
   SettingsPage.vue   — 设置页
 
