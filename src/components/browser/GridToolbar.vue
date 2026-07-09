@@ -233,7 +233,7 @@ async function batchMove() {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
-.image-count { font-size: 13px; color: var(--text-muted); font-weight: 450; }
+.image-count { padding: 5px 10px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); white-space: nowrap; }
 .header-left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 6px; }
 .back-btn {
   display: flex;
@@ -245,7 +245,7 @@ async function batchMove() {
   border-radius: var(--radius-sm);
 }
 .back-btn svg { flex-shrink: 0; }
-.workspace-name { font-size: 13px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-name { padding: 5px 10px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 4px; }
 .btn-group { display: flex; align-items: center; gap: 4px; }
 .divider { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
