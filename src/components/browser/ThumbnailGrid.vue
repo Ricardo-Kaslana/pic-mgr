@@ -598,7 +598,7 @@ defineExpose({ scrollToImage, locateAndFlash })
           :aria-label="t('browser.viewFullscreen')"
           @click="handleExpandClick(vi.image, $event)"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 6V2h4" />
             <path d="M14 6V2h-4" />
             <path d="M2 10v4h4" />
@@ -862,8 +862,8 @@ defineExpose({ scrollToImage, locateAndFlash })
   position: absolute;
   top: 6px;
   left: 6px;
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
