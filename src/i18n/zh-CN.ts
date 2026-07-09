@@ -59,6 +59,7 @@ export default {
     backToWorkspaces: '返回工作区',
     scrollToTop: '回到顶部',
     scrollToBottom: '回到底部',
+    viewFullscreen: '全屏查看',
     scanning: '扫描中... {processed}/{total}',
   },
   sidebar: {

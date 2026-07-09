@@ -322,6 +322,18 @@ function handleDoubleClick(image: ImageSummary) {
   if (idx >= 0) emit('viewFullscreen', idx)
 }
 
+// Hover-revealed expand button: an explicit affordance for opening the
+// fullscreen viewer that works in both normal and select modes (unlike
+// double-click, which is suppressed in select mode so the user can chain
+// single-click selects without accidentally zooming in). @click.stop is
+// required so clicking the button does not also trigger the cell's
+// normal single-click handler (toggle selection / select detail).
+function handleExpandClick(image: ImageSummary, e: MouseEvent) {
+  e.stopPropagation()
+  const idx = imageStore.images.findIndex(i => i.id === image.id)
+  if (idx >= 0) emit('viewFullscreen', idx)
+}
+
 // Context menu
 const contextMenu = reactive({ visible: false, x: 0, y: 0, image: null as ImageSummary | null })
 const showWorkspacePicker = ref(false)
@@ -580,6 +592,19 @@ defineExpose({ scrollToImage, locateAndFlash })
             {{ '★'.repeat(vi.image.rating) }}{{ '☆'.repeat(5 - vi.image.rating) }}
           </div>
         </div>
+        <button
+          class="expand-btn"
+          :title="t('browser.viewFullscreen')"
+          :aria-label="t('browser.viewFullscreen')"
+          @click="handleExpandClick(vi.image, $event)"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 6V2h4" />
+            <path d="M14 6V2h-4" />
+            <path d="M2 10v4h4" />
+            <path d="M14 10v4h-4" />
+          </svg>
+        </button>
         <div v-if="selectMode && selection.selectedIds.has(vi.image.id)" class="check-mark">✓</div>
       </div>
     </div>
@@ -824,6 +849,53 @@ defineExpose({ scrollToImage, locateAndFlash })
   font-size: 13px; font-weight: 700;
   box-shadow: var(--shadow-sm);
   z-index: 2;
+}
+
+/* Hover-revealed expand button in the top-left corner of each
+  thumbnail cell. Mirrors the look-and-feel of .scroll-fab-btn so
+  the two floating-button systems feel like the same family, but is
+  smaller (26px vs 36px) to fit inside a thumbnail and uses z-index
+  3 so it stacks above .check-mark (which is top-right, z-index 2).
+  Default state is opacity 0 + pointer-events none so it does not
+  intercept clicks when the cell is not being hovered. */
+.expand-btn {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity 0.18s ease, transform 0.22s var(--ease-spring),
+              background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.grid-cell:hover .expand-btn {
+  opacity: 0.95;
+  transform: scale(1);
+  pointer-events: auto;
+}
+.expand-btn:hover {
+  opacity: 1;
+  background: var(--bg-secondary);
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+.expand-btn:active {
+  transform: scale(0.92);
+  transition: transform 0.1s ease;
 }
 
 .context-menu {

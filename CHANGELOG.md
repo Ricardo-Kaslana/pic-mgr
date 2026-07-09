@@ -1,4 +1,10 @@
 
+## [0.3.8] — 2026-07-09
+
+### Added
+
+- **Hover-revealed expand button on each thumbnail cell**: A small circular button in the top-left corner of every `.grid-cell` in the thumbnail grid, hidden by default (`opacity: 0`, `pointer-events: none`) and revealed on `.grid-cell:hover` with a scale-spring entrance. Clicking it emits `viewFullscreen` with the cell's index — the same event the existing `@dblclick` handler emits — so the original double-click-to-expand path is fully preserved and unaffected. The button works in both normal and select modes (unlike double-click, which is suppressed in select mode); `@click.stop` ensures the button does not also fire the cell's normal single-click handler (toggle selection / select detail). 26×26 px, mirrors the look-and-feel of `.scroll-fab-btn` (same border, hover fill, and accent-color treatment) but scaled down to fit inside a thumbnail. `z-index: 3` stacks it above the right-side `.check-mark` (z-index 2) so both are visible simultaneously in select mode. Icon: 4-corner-outward-arrows SVG. Tooltip / aria-label use new i18n key `browser.viewFullscreen` (`'全屏查看'` / `'View fullscreen'`).
+
 ## [0.3.7] — 2026-07-09
 
 ### Added

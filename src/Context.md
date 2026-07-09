@@ -35,7 +35,7 @@ components/
     CreateWorkspaceDialog.vue — 新建工作区弹窗
   browser/
     GridToolbar.vue          — 顶部工具栏（flex-wrap 自适应；按钮统一为 .toolbar-btn / .primary / .danger 三种 outlined 形态，hover 填充对应色）
-    ThumbnailGrid.vue        — 虚拟滚动缩略图网格 (shallowRef thumbUrls, smart scroll)
+    ThumbnailGrid.vue        — 虚拟滚动缩略图网格 (shallowRef thumbUrls, smart scroll；每张图左上角 hover 显形的展开按钮，单击全屏)
     SidebarPanel.vue         — 搜索 + 标签筛选侧栏
     SearchBar.vue            — 防抖搜索输入
     TagFilter.vue            — 标签筛选器

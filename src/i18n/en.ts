@@ -61,6 +61,7 @@ export default {
     backToWorkspaces: 'Back to workspaces',
     scrollToTop: 'Scroll to Top',
     scrollToBottom: 'Scroll to Bottom',
+    viewFullscreen: 'View fullscreen',
     scanning: 'Scanning... {processed}/{total}',
   },
   sidebar: {
