@@ -1,6 +1,6 @@
 {
   "name": "pic-mgr",
-  "version": "0.1.0",
+  "version": "0.3.13",
   "private": true,
   "type": "module",
   "scripts": {

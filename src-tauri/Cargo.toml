@@ -1,6 +1,6 @@
 [package]
 name = "pic-mgr"
-version = "0.3.4"
+version = "0.3.13"
 edition = "2021"
 
 [dependencies]
