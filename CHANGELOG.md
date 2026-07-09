@@ -1,4 +1,29 @@
 
+## [0.3.10] — 2026-07-09
+
+### Changed
+
+- **Refactor: extract `useLocalStorage` composable**. Replaced the 7-fold repetition of `ref(localStorage.getItem(...)) + watch(setItem)` across `useSettingsStore` with a single generic `useLocalStorage<T>(key, default, { read, write, apply })` composable. The composable supports custom read/write/apply hooks — `theme` uses `apply` for `document.documentElement.setAttribute('data-theme', v)`, `thumbnailSize` uses `read` for coercion (`Number.isFinite`), and all boolean refs use `read: raw => raw === 'true'`.
+
+- **New `storageKeys` constant module** (`src/composables/storageKeys.ts`) centralizes all 7 localStorage key strings (theme, thumbnailSize, language, sidebarCollapsed, browserSidebarCollapsed, sortBy, sortDir) in one place. i18n bootstrap now reads from `STORAGE_KEYS.language` instead of inlining `'pic-mgr-lang'`.
+
+- **Browser sidebar collapse promoted to settings store**. `BrowserView.vue`'s inner `sidebarCollapsed` + private `localStorage` watch moved into `useSettingsStore.browserSidebarCollapsed`. A computed proxy (`get`/`set`) preserves the existing `sidebarCollapsed` template usage patterns.
+
+- **Thumbnail store reactivity fixes**: `accessOrder` changed from deep-reactive `ref<number[]>` to `shallowRef<number[]>` + manual `triggerRef` (matching the existing pattern for `cache`); removed 3 copy-on-write `new Set(loading.value)` allocations replaced by `triggerRef(loading)` after mutation.
+
+### Fixed
+
+- **`imageStore.search()` now resets pagination**. Previously a user on page 5 of the grid who searched would get page 5 of the FTS5 results (usually empty). `search()` now sets `page = 1` before fetching.
+
+- **`workspace.scan()` merged with `startScan()`**. The `scan` variant had no progress-listener subscription, making rescans from the home page never report incremental progress. The single remaining `scan()` always subscribes to `scan-progress`. Dead `startScan` removed from store exports and call sites.
+
+### Removed
+
+- **`selection.toggle(imageId, shiftKey)` — unused parameter**. The `shiftKey` boolean was declared but never consumed by the function body (range select is driven by callers via `selectRange()` directly with the full visible ID list). Call sites in `ThumbnailGrid.vue` updated to drop the argument.
+
+- **`SettingsPage.vue` duplicate localStorage write** for language change removed (the `useLocalStorage` watcher in settings store already persists `pic-mgr-lang`).
+
+
 ## [0.3.9] — 2026-07-09
 
 ### Added

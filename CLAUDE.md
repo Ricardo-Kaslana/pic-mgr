@@ -13,7 +13,7 @@ Project-level guidance for AI agents.
 ```
 pic-mgr/
 ├── src/                          — Vue 前端
-│   ├── stores/                   — 6 个 Pinia stores
+│   ├── stores/                   — 6 个 Pinia stores + 3 个 composables
 │   ├── views/                    — 4 个页面
 │   ├── components/               — UI 组件
 │   ├── i18n/                     — vue-i18n (zh-CN, en)
@@ -101,11 +101,15 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 - **按钮系统** 统一 btn-primary/secondary/ghost/danger + btn-sm/md/lg + btn-icon/pill 体系，全局一致 hover/active/disabled 三态反馈
 - **排序控制** 网格头部下拉菜单，支持文件名/收录时间/修改时间/创建时间；点击切换升降序；`queries.rs` 的 `sort_col` match 动态映射；排序列与方向跨会话持久化到 `useSettingsStore.sortBy` / `sortDir` (`pic-mgr-sort-by` / `pic-mgr-sort-dir`)
 - **快速定位** 详情面板打开时自动滚动网格到选中图片（nextTick + 80ms 等待布局回流），accent 发光边框高亮；详情面板头部 ⌖ 按钮手动触发
-- **面板折叠** 侧栏和详情面板可完全收起（width→0），28px 圆形切换按钮浮在面板边缘；hover 浮现 + accent 发光；SVG chevron 图标；选中图片时自动展开详情面板；工作区内层 SidebarPanel 折叠状态跨会话持久化到 `pic-mgr-browser-sidebar-collapsed`
+- **面板折叠** 侧栏和详情面板可完全收起（width→0），28px 圆形切换按钮浮在面板边缘；hover 浮现 + accent 发光；SVG chevron 图标；选中图片时自动展开详情面板；工作区内层 SidebarPanel 折叠状态跨会话持久化（通过 `useSettingsStore.browserSidebarCollapsed`，由 `useLocalStorage` 统一写入 `pic-mgr-browser-sidebar-collapsed`）
 - **悬浮滚动按钮** 缩略图网格右下角浮动 `回到顶部` / `回到底部` 圆形按钮（v0.3.4+）。
   - .scroll-fab 与 .grid-sizer 同级，是 .thumb-grid 的直接子元素；.thumb-grid 设了 position: relative 才能让绝对定位 FAB 钉在可视区域，被 overflow: auto 边界裁剪。
   - 单个 ref({ canScroll, scrollTop, distanceFromBottom }) 反应式袋子，由 updateScrollInfo() 助手在 onScroll / ResizeObserver / watch(totalHeight) 三个时机更新；不拆成多个 ref，避免多余 reactivity 开销。
   - 阈值 300px 通过模块顶部常量 SCROLL_FAB_THRESHOLD 暴露给模板（不在模板里写魔法数字）
+
+- **useLocalStorage composable** 泛型封装 `ref(getItem)+watch(setItem)` 模式，支持 custom read/write/apply hooks；settings store 的 7 个持久化字段均通过该 composable 实现，消除了重复代码
+- **storageKeys 常量** 所有 localStorage 键名集中在 `src/composables/storageKeys.ts`，避免魔法字符串分散在各处
+- **workspace.scan() 合并** 移除无进度监听的 `scan()` 变体，保留 always-subscribe 的单一实现；`startScan` 已从 store 导出中删除
 
 ## 已知限制
 
