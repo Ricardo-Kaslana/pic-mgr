@@ -1,4 +1,10 @@
 
+## [0.3.9] — 2026-07-09
+
+### Added
+
+- **Sort selection persists across launches**: The current sort column and direction in the toolbar's sort menu now persist via two new localStorage keys — `pic-mgr-sort-by` (e.g. `name` / `indexed_at` / `updated_at` / `file_created_at`) and `pic-mgr-sort-dir` (`asc` / `desc`). Implemented by adding `sortBy` / `sortDir` refs to `useSettingsStore` (alongside the existing `theme` / `thumbnailSize` / `language` / `sidebarCollapsed` pattern) and seeding `imageStore.filters.sort_by` / `sort_dir` from those refs at first fetch. `setSort()` mirrors writes back to the settings refs so the watch there fires and writes the new value to localStorage. Same localStorage + watch pattern used by the other persisted prefs.
+
 ## [0.3.8] — 2026-07-09
 
 ### Added

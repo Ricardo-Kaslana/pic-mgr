@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useSettingsStore } from './settings'
 import type { ImageSummary, ImageDetail, ImagePage, ImageSummaryPage, ImageFilters } from '../types'
 
 /**
@@ -14,6 +15,7 @@ import type { ImageSummary, ImageDetail, ImagePage, ImageSummaryPage, ImageFilte
  * the user opens the right-hand detail panel.
  */
 export const useImageStore = defineStore('images', () => {
+  const settings = useSettingsStore()
   const images = ref<ImageSummary[]>([])
   const total = ref(0)
   const page = ref(1)
@@ -25,14 +27,20 @@ export const useImageStore = defineStore('images', () => {
   const selectedDetail = ref<ImageDetail | null>(null)
   const lastSelectedId = ref<number | null>(null)
 
+  // sort_by / sort_dir are seeded from the settings store so the user's
+  // last sort choice persists across launches. We keep the live values
+  // on the filters reactive (rather than reading from settings on every
+  // query) so the toolbar / grid can still do fine-grained reactivity
+  // over the filter object, and mirror writes back to settings in
+  // setSort() so the localStorage-backed ref stays in sync.
   const filters = reactive<ImageFilters>({
     tag_ids: null,
     format: null,
     rating_min: null,
     date_from: null,
     date_to: null,
-    sort_by: 'indexed_at',
-    sort_dir: 'desc',
+    sort_by: settings.sortBy,
+    sort_dir: settings.sortDir,
   })
 
   async function fetchImages(workspaceId: number, append = false) {
@@ -85,6 +93,10 @@ export const useImageStore = defineStore('images', () => {
   function setSort(by: string, dir: string, wsId: number) {
     filters.sort_by = by
     filters.sort_dir = dir
+    // Mirror to the persisted settings ref. The settings store has its
+    // own watch that writes the new value to localStorage.
+    settings.sortBy = by
+    settings.sortDir = dir
     page.value = 1
     fetchImages(wsId)
   }

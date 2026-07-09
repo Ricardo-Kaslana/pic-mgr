@@ -33,6 +33,25 @@ export const useSettingsStore = defineStore('settings', () => {
     localStorage.setItem('pic-mgr-sidebar-collapsed', String(v))
   }, { immediate: true })
 
+  // Default sort mirrors the original hardcoded fallback in imageStore
+  // filters ('indexed_at' / 'desc'). Stored as plain strings (not a
+  // typed union) so a stale localStorage entry from a renamed sort
+  // key does not crash the store - GridToolbar falls back to its
+  // 'indexedAt' label when sort_by does not match any option.
+  const sortBy = ref<string>(
+    localStorage.getItem('pic-mgr-sort-by') ?? 'indexed_at'
+  )
+  const sortDir = ref<string>(
+    localStorage.getItem('pic-mgr-sort-dir') ?? 'desc'
+  )
+
+  watch(sortBy, (v) => {
+    localStorage.setItem('pic-mgr-sort-by', v)
+  })
+  watch(sortDir, (v) => {
+    localStorage.setItem('pic-mgr-sort-dir', v)
+  })
+
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
@@ -41,5 +60,5 @@ export const useSettingsStore = defineStore('settings', () => {
     theme.value = theme.value === 'dark' ? 'light' : 'dark'
   }
 
-  return { theme, thumbnailSize, language, sidebarCollapsed, toggleTheme, toggleSidebar }
+  return { theme, thumbnailSize, language, sidebarCollapsed, sortBy, sortDir, toggleTheme, toggleSidebar }
 })

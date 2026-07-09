@@ -20,7 +20,7 @@ stores/
   tags.ts            — 标签 CRUD、批量操作；fetchTags 单飞 + per-workspace 缓存
   selection.ts       — 多选状态 (支持 Shift 范围选)
   thumbnail.ts       — 缩略图 blob URL 缓存 (shallowRef<Map>, LRU 500)
-  settings.ts        — 主题、缩略图尺寸、语言、侧栏折叠 (pic-mgr-sidebar-collapsed) (localStorage)
+  settings.ts        — 主题、缩略图尺寸、语言、侧栏折叠 (pic-mgr-sidebar-collapsed)、排序方式 (pic-mgr-sort-by / pic-mgr-sort-dir) (localStorage)
 
 views/
   WorkspaceHome.vue  — 工作区列表页
