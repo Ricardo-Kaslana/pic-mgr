@@ -149,12 +149,12 @@ async function batchMove() {
 <template>
   <div class="grid-header">
     <div class="header-left">
-      <button class="toolbar-btn back-btn" :title="t('browser.backToWorkspaces')" @click="goBack">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <span class="workspace-name" v-if="props.workspaceName" @click="goBack" :title="t('browser.backToWorkspaces')">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10 2L4 8l6 6"/>
         </svg>
-      </button>
-      <span class="workspace-name" v-if="props.workspaceName">{{ props.workspaceName }}</span>
+        {{ props.workspaceName }}
+      </span>
       <span class="image-count">{{ t('browser.imageCount', { count: imageStore.total }) }}</span>
       <div class="sort-dropdown">
         <button class="toolbar-btn sort-btn" aria-haspopup="listbox" :aria-expanded="showSortMenu" @click="showSortMenu = !showSortMenu">
@@ -235,17 +235,11 @@ async function batchMove() {
 }
 .image-count { padding: 5px 10px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); white-space: nowrap; }
 .header-left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 6px; }
-.back-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: var(--radius-sm);
-}
-.back-btn svg { flex-shrink: 0; }
-.workspace-name { padding: 5px 10px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.workspace-name { cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-name:hover { background: var(--bg-tertiary); }
+.workspace-name svg { flex-shrink: 0; }
+
 .header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 4px; }
 .btn-group { display: flex; align-items: center; gap: 4px; }
 .divider { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
