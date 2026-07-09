@@ -116,7 +116,7 @@ function goSettings() { router.push('/settings') }
   letter-spacing: -0.03em;
   transition: opacity 150ms ease-out;
 }
-.app-layout.collapsed .sidebar-brand { padding: 16px 0 16px 14px; justify-content: center; }
+.app-layout.collapsed .sidebar-brand { padding: 16px 0 16px 14px; justify-content: flex-start; }
 .app-layout.collapsed .brand-icon { width: 22px; height: 22px; }
 .app-layout.collapsed .brand-text {
   opacity: 0;
