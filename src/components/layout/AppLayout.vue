@@ -148,7 +148,12 @@ function goSettings() { router.push('/settings') }
 .sidebar-toggle:active { opacity: 0.7; }
 .app-layout.collapsed .sidebar-toggle { transform: rotate(180deg); }
 
-.app-layout.collapsed .sidebar-brand { padding-left: 15px; padding-right: 15px; }
+.app-layout.collapsed .sidebar-brand {
+  padding: 16px 0;
+  gap: 0;
+  justify-content: space-between;
+}
+.app-layout.collapsed .brand-icon { width: 28px; height: 28px; }
 .app-layout.collapsed .brand-text {
   opacity: 0;
   width: 0;
@@ -204,7 +209,13 @@ function goSettings() { router.push('/settings') }
 .nav-label {
   transition: opacity 150ms ease-out;
 }
-.app-layout.collapsed .nav-item { justify-content: center; gap: 0; }
+.app-layout.collapsed .nav-item {
+  padding: 9px 0;
+  justify-content: center;
+  gap: 0;
+}
+.app-layout.collapsed .nav-icon { width: 22px; }
+.app-layout.collapsed .nav-icon svg { width: 20px; height: 20px; }
 .app-layout.collapsed .nav-label { opacity: 0; }
 
 /* Footer */
@@ -244,10 +255,16 @@ function goSettings() { router.push('/settings') }
 }
 .theme-toggle > span:last-child { transition: width 150ms ease-out, opacity 150ms ease-out; }
 .app-layout.collapsed .theme-toggle {
+  padding: 8px 0;
   justify-content: center;
-  padding-left: 0;
-  padding-right: 0;
+  background: transparent;
+  border-color: transparent;
 }
+.app-layout.collapsed .theme-toggle:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}
+.app-layout.collapsed .theme-icon { width: 22px; font-size: 16px; }
 .app-layout.collapsed .theme-toggle > span:last-child {
   width: 0;
   overflow: hidden;
