@@ -169,6 +169,7 @@ function goSettings() { router.push('/settings') }
   flex-direction: column;
   gap: 2px;
 }
+.app-layout.collapsed .sidebar-nav { padding-left: 0; padding-right: 0; }
 .nav-item {
   display: flex;
   align-items: center;
@@ -210,8 +211,8 @@ function goSettings() { router.push('/settings') }
   transition: opacity 150ms ease-out;
 }
 .app-layout.collapsed .nav-item {
-  padding: 9px 0;
-  justify-content: center;
+  padding: 9px 14px;
+  justify-content: flex-start;
   gap: 0;
 }
 .app-layout.collapsed .nav-icon { width: 22px; }
@@ -226,6 +227,7 @@ function goSettings() { router.push('/settings') }
   flex-direction: column;
   gap: 6px;
 }
+.app-layout.collapsed .sidebar-footer { padding-left: 0; padding-right: 0; padding-bottom: 0; }
 .theme-toggle {
   width: 100%;
   background: var(--bg-tertiary);
@@ -255,8 +257,8 @@ function goSettings() { router.push('/settings') }
 }
 .theme-toggle > span:last-child { transition: width 150ms ease-out, opacity 150ms ease-out; }
 .app-layout.collapsed .theme-toggle {
-  padding: 8px 0;
-  justify-content: center;
+  padding: 8px 14px;
+  justify-content: flex-start;
   background: transparent;
   border-color: transparent;
 }
