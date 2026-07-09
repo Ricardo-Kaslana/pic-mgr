@@ -1,4 +1,11 @@
 
+
+## [0.3.11] — 2026-07-10
+
+### Fixed
+
+- **Rescan now removes orphaned images from the grid.** `workspaceStore.scan()` was calling the Rust `scan_workspace` command which only inserts files it finds on disk and never deletes DB records for files that no longer exist. When users deleted images directly from the filesystem and rescanned, the deleted images remained in the grid with a broken full-screen view. Changed the invoke target from `scan_workspace` to `rescan_workspace`, which executes `DELETE FROM images WHERE workspace_id = ?` before scanning. For brand-new workspaces the DELETE is a no-op, so initial scan behavior is unchanged. Progress events are unaffected since `rescan_workspace` delegates to `scan_workspace` internally.
+
 ## [0.3.10] — 2026-07-09
 
 ### Changed

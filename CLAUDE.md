@@ -95,6 +95,7 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 - **文件日期** `created_at` 存 filesystem mtime；`file_created_at` 存 birth time；`indexed_at` 存入库时间
 - **DB 迁移** 启动时 `ALTER TABLE ADD COLUMN`，`.ok()` 忽略已存在错误
 - **删除图片** 使用 `trash` crate 移入系统回收站（安全），同时清理 DB 记录 + 缩略图缓存
+- **重新扫描** `workspaceStore.scan()` 调用 `rescan_workspace`（先 `DELETE FROM images WHERE workspace_id = ?`，再扫描），确保已删除文件的孤立 DB 记录被清除；进度事件无缝有效
 - **移动图片** `fs::rename` 移动文件，跨盘 fallback 到 copy+delete；文件名冲突自动加后缀 `_1`/`_2`，更新 DB 记录
 - **从工作区移除** 仅删除 DB 记录，不碰磁盘文件（原有行为不变）
 - **大图查看** 双击缩略图或点击 hover 显形的展开按钮 → LightboxViewer 全屏，`read_file_bytes` 命令读原文件 → blob URL 显示；← → 键翻页，Escape 关闭

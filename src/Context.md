@@ -25,7 +25,7 @@ composables/         — useLocalStorage (localStorage ref+watch 泛型封装)�
   settings.ts        — 主题、缩略图尺寸、语言、侧栏折叠 (pic-mgr-sidebar-collapsed)、工作区侧栏折叠 (pic-mgr-browser-sidebar-collapsed)、排序方式 (pic-mgr-sort-by / pic-mgr-sort-dir)；通过 useLocalStorage composable 统一管理，storageKeys 常量集中定义键名
 
 views/
-  WorkspaceHome.vue  — 工作区列表页
+  WorkspaceHome.vue  — 工作区列表页（重新扫描调用 rescan_workspace，清除已删除图片的孤立 DB 记录）
   BrowserView.vue    — 主浏览页 (Sidebar + Grid + Detail + 内嵌 DedupView；排序/定位/面板折叠；inner SidebarPanel 折叠状态跨会话持久化到 localStorage；排序方式持久化到 useSettingsStore)
   DedupView.vue      — 重复图片检测 (作为 BrowserView 子组件)
   SettingsPage.vue   — 设置页
