@@ -231,13 +231,17 @@ async function batchMove() {
 
 <style scoped>
 .grid-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 0;
   padding: 10px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
 .image-count { font-size: 13px; color: var(--text-muted); font-weight: 450; }
-.header-left { display: flex; align-items: center; gap: 8px; }
+.header-left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 6px; }
 .back-btn {
   display: flex;
   align-items: center;
@@ -248,7 +252,7 @@ async function batchMove() {
   border-radius: var(--radius-sm);
 }
 .back-btn svg { flex-shrink: 0; }
-.header-actions { display: flex; align-items: center; gap: 6px; }
+.header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 4px; }
 .btn-group { display: flex; align-items: center; gap: 4px; }
 .divider { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
 .sort-dropdown { position: relative; }
