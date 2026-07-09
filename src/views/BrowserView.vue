@@ -177,7 +177,7 @@ onUnmounted(() => {
         :title="sidebarCollapsed ? t('browser.expandSidebar') : t('browser.collapseSidebar')"
         @click="sidebarCollapsed = !sidebarCollapsed"
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path v-if="sidebarCollapsed" d="M4 2l4 4-4 4" />
           <path v-else d="M8 2L4 6l4 4" />
         </svg>
@@ -212,7 +212,7 @@ onUnmounted(() => {
         :title="detailCollapsed ? t('browser.expandDetail') : t('browser.collapseDetail')"
         @click="detailCollapsed = !detailCollapsed"
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path v-if="detailCollapsed" d="M8 2L4 6l4 4" />
           <path v-else d="M4 2l4 4-4 4" />
         </svg>
@@ -279,8 +279,8 @@ onUnmounted(() => {
 
 .edge-toggle {
   position: relative;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
