@@ -293,7 +293,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   align-self: center;
   padding: 0;
-  opacity: 0;
+  opacity: 0.35;
   transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), margin 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .sidebar-edge,
