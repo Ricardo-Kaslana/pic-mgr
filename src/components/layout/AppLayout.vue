@@ -16,7 +16,7 @@ function goSettings() { router.push('/settings') }
   <div class="app-layout" :class="{ collapsed: settings.sidebarCollapsed }">
     <aside class="sidebar">
       <div class="sidebar-brand" @click="goHome">
-        <div class="brand-icon">
+        <div class="brand-icon" @click.stop="settings.toggleSidebar()" :title="t('nav.toggleSidebar')">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="3" />
             <circle cx="8.5" cy="8.5" r="1.5" />
@@ -24,15 +24,6 @@ function goSettings() { router.push('/settings') }
           </svg>
         </div>
         <span class="brand-text">PicMgr</span>
-        <button
-          class="sidebar-toggle"
-          :aria-label="t('nav.toggleSidebar')"
-          @click.stop="settings.toggleSidebar()"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
       </div>
 
       <nav class="sidebar-nav">
@@ -125,34 +116,7 @@ function goSettings() { router.push('/settings') }
   letter-spacing: -0.03em;
   transition: opacity 150ms ease-out;
 }
-.sidebar-toggle {
-  margin-left: auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-.sidebar-toggle:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--border);
-}
-.sidebar-toggle:active { opacity: 0.7; }
-.app-layout.collapsed .sidebar-toggle { width: 22px; height: 22px; transform: rotate(180deg); }
-
-.app-layout.collapsed .sidebar-brand {
-  padding: 16px 0 16px 14px;
-  gap: 0;
-  justify-content: space-between;
-}
+.app-layout.collapsed .sidebar-brand { padding: 16px 0 16px 14px; justify-content: center; }
 .app-layout.collapsed .brand-icon { width: 22px; height: 22px; }
 .app-layout.collapsed .brand-text {
   opacity: 0;
