@@ -9,10 +9,12 @@ export const useSelectionStore = defineStore('selection', () => {
   const hasSelection = computed(() => selectedIds.value.size > 0)
   const all = computed(() => Array.from(selectedIds.value))
 
-  function toggle(id: number, shiftKey: boolean = false) {
-    if (shiftKey && lastClickedId.value !== null) {
-      // Shift+click: range select (handled by ThumbnailGrid)
-    }
+  function toggle(id: number) {
+    // Shift+click range select is intentionally not handled here
+    // 鈥?callers that need it (ThumbnailGrid) drive selectRange
+    // directly with the visible id list. Keeping the store API
+    // narrow avoids subtle bugs where shiftKey is read at the
+    // wrong moment (after a fetch invalidates lastClickedId).
     const newSet = new Set(selectedIds.value)
     if (newSet.has(id)) {
       newSet.delete(id)

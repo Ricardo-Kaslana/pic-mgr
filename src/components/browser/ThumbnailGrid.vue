@@ -308,9 +308,9 @@ function onScroll(e: Event) {
   }
 }
 
-function handleClick(image: ImageSummary, e: MouseEvent) {
+function handleClick(image: ImageSummary) {
   if (props.selectMode) {
-    selection.toggle(image.id, e.shiftKey)
+    selection.toggle(image.id)
   } else {
     emit('selectDetail', image.id)
   }
@@ -342,7 +342,7 @@ function handleContextMenu(image: ImageSummary, e: MouseEvent) {
   e.preventDefault()
   if (!selection.selectedIds.has(image.id)) {
     selection.clear()
-    selection.toggle(image.id, false)
+    selection.toggle(image.id)
   }
   contextMenu.visible = true
   contextMenu.x = e.clientX
@@ -571,7 +571,7 @@ defineExpose({ scrollToImage, locateAndFlash })
         class="grid-cell"
         :style="vi.style"
         :class="{ selected: selectMode && selection.selectedIds.has(vi.image.id), 'detail-active': detailImageId === vi.image.id, 'flash-locate': flashId === vi.image.id }"
-        @click="handleClick(vi.image, $event)"
+        @click="handleClick(vi.image)"
         @dblclick="handleDoubleClick(vi.image)"
         @contextmenu.prevent="handleContextMenu(vi.image, $event)"
       >

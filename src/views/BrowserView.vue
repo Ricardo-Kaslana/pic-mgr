@@ -7,6 +7,7 @@ import { listen } from '@tauri-apps/api/event'
 import { useWorkspaceStore } from '../stores/workspace'
 import { useImageStore } from '../stores/images'
 import { useSelectionStore } from '../stores/selection'
+import { useSettingsStore } from '../stores/settings'
 import { useTagStore } from '../stores/tags'
 import { useToast } from '../composables/useToast'
 import SidebarPanel from '../components/browser/SidebarPanel.vue'
@@ -29,14 +30,17 @@ const workspaceId = computed(() => Number(route.params.id))
 const selectMode = ref(false)
 const showDedup = ref(false)
 const gridRef = ref<InstanceType<typeof ThumbnailGrid> | null>(null)
-const sidebarCollapsed = ref<boolean>(
-  localStorage.getItem('pic-mgr-browser-sidebar-collapsed') === 'true'
-)
 const detailCollapsed = ref(false)
 
-watch(sidebarCollapsed, (v) => {
-  localStorage.setItem('pic-mgr-browser-sidebar-collapsed', String(v))
-}, { immediate: true })
+// Browser sidebar collapse state lives in the settings store so it persists
+// alongside the outer nav sidebar and survives app restarts. Wrapped in a
+// computed so the existing sidebarCollapsed template usage (v-show, @click)
+// keeps working without rewriting every reference.
+const settings = useSettingsStore()
+const sidebarCollapsed = computed({
+  get: () => settings.browserSidebarCollapsed,
+  set: (v: boolean) => { settings.browserSidebarCollapsed = v },
+})
 
 const scanning = ref(false)
 const scanProgress = ref<ScanProgress | null>(null)
@@ -73,7 +77,7 @@ onMounted(async () => {
     // render on every workspace switch.
     workspaceStore.fetchAll()
 
-    // Load images first — this is the critical path that the user
+    // Load images first 鈥?this is the critical path that the user
     // sees. Tags and workspace-list refresh happen in the background.
     await imageStore.fetchImages(workspaceId.value)
 
@@ -101,7 +105,7 @@ onMounted(async () => {
 
     // Race-condition catch-up. The previous version re-issued a
     // second `fetchImages` and then unconditionally triggered
-    // `generate_thumbnails_batch` — that command makes the DB hold
+    // `generate_thumbnails_batch` 鈥?that command makes the DB hold
     // its connection through N file-existence checks plus a per-id
     // query loop, which is what caused the post-open stutter on
     // large workspaces. We now only re-fetch if the DB was clearly

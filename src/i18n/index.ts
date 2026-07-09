@@ -2,7 +2,9 @@ import { createI18n } from 'vue-i18n'
 import zhCN from './zh-CN'
 import en from './en'
 
-const savedLang = localStorage.getItem('pic-mgr-lang') || 'zh-CN'
+import { STORAGE_KEYS } from '../composables/storageKeys'
+
+const savedLang = localStorage.getItem(STORAGE_KEYS.language) || 'zh-CN'
 
 const i18n = createI18n({
   legacy: false,

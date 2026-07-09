@@ -20,7 +20,7 @@ async function handleCreate(name: string, path: string) {
   const ws = await store.create(name, path)
   showDialog.value = false
   router.push(`/workspace/${ws.id}`)
-  store.startScan(ws.id)
+  store.scan(ws.id)
 }
 
 function handleSelect(id: number) {

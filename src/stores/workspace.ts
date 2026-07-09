@@ -48,14 +48,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (currentId.value === id) currentId.value = null
   }
 
+  // Single scan entry point. Always subscribes to scan-progress so
+ // callers (initial scan after create, or rescan from the home
+ // page) get incremental updates regardless of which UI element
+ // is currently showing scanProgress. The previous split into
+ // scan (no listener, broken for rescan) and startScan (with
+ // listener) was redundant and let rescan never report progress.
   async function scan(id: number) {
-    scanProgress.value = null
-    const progress = await invoke<ScanProgress>('scan_workspace', { id })
-    scanProgress.value = progress
-    return progress
-  }
-
-  async function startScan(id: number) {
     scanProgress.value = null
 
     const unlisten = await listen<ScanProgress>('scan-progress', (event) => {
@@ -79,5 +78,5 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     loaded.value = false
   }
 
-  return { workspaces, currentId, current, scanProgress, loaded, loading, fetchAll, create, remove, scan, startScan, select, invalidate }
+  return { workspaces, currentId, current, scanProgress, loaded, loading, fetchAll, create, remove, scan, select, invalidate }
 })

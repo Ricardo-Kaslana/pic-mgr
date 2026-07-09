@@ -19,7 +19,7 @@ export const useImageStore = defineStore('images', () => {
   const images = ref<ImageSummary[]>([])
   const total = ref(0)
   const page = ref(1)
-  // Default page size bumped from 50 → 100 so 100+ image workspaces
+  // Default page size bumped from 50 鈫?100 so 100+ image workspaces
   // (the exact case the user is hitting) render in a single round trip
   // instead of forcing a scroll-triggered second fetch.
   const pageSize = ref(100)
@@ -71,6 +71,10 @@ export const useImageStore = defineStore('images', () => {
   }
 
   async function search(workspaceId: number, query: string) {
+    // Search is a fresh result set 鈥?start from page 1. Otherwise
+    // a user sitting on page 5 of the grid would get page 5 of the
+    // search results (usually empty).
+    page.value = 1
     loading.value = true
     try {
       // FTS search still returns full records because results are usually

@@ -12,10 +12,10 @@ const sizePresets = [
   { label: 'L', value: 320 },
 ]
 
-// Sync language changes to i18n
+// Sync language changes to i18n. localStorage write happens inside
+// useLocalStorage's watcher in the settings store.
 watch(() => settings.language, (lang) => {
   locale.value = lang
-  localStorage.setItem('pic-mgr-lang', lang)
 })
 </script>
 

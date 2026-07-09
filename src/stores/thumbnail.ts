@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { shallowRef, ref } from 'vue'
+import { shallowRef, triggerRef } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 const MAX_CACHE_SIZE = 500
@@ -13,23 +13,32 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
   // shallowRef: avoids Vue proxying each Map entry; we mutate in-place and trigger manually
   const cache = shallowRef<Map<number, string>>(new Map())
   const loading = shallowRef<Set<number>>(new Set())
-  const accessOrder = ref<number[]>([])
+  // shallowRef + manual triggerRef —this list is mutated on every
+  // thumbnail load (LRU touch + evict). Deep reactivity would
+  // proxy every array entry; for the accessOrder list we never
+  // need to read individual entries reactively, only fan out
+  // once per mutation batch.
+  const accessOrder = shallowRef<number[]>([])
 
   function touchAccess(imageId: number) {
-    const idx = accessOrder.value.indexOf(imageId)
-    if (idx !== -1) accessOrder.value.splice(idx, 1)
-    accessOrder.value.push(imageId)
+    const arr = accessOrder.value
+    const idx = arr.indexOf(imageId)
+    if (idx !== -1) arr.splice(idx, 1)
+    arr.push(imageId)
+    triggerRef(accessOrder)
   }
 
   function evictOldest() {
-    while (cache.value.size >= MAX_CACHE_SIZE && accessOrder.value.length > 0) {
-      const oldest = accessOrder.value.shift()!
+    const arr = accessOrder.value
+    while (cache.value.size >= MAX_CACHE_SIZE && arr.length > 0) {
+      const oldest = arr.shift()!
       const url = cache.value.get(oldest)
       if (url) {
         URL.revokeObjectURL(url)
         cache.value.delete(oldest)
       }
     }
+    if (arr.length < accessOrder.value.length) triggerRef(accessOrder)
   }
 
   function bytesToUrl(bytes: number[]): string {
@@ -62,7 +71,7 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
       return null
     } finally {
       loading.value.delete(imageId)
-      loading.value = new Set(loading.value) // trigger shallowRef update
+      triggerRef(loading)
     }
   }
 
@@ -79,7 +88,7 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
 
     // Mark all as loading
     for (const id of uncached) loading.value.add(id)
-    loading.value = new Set(loading.value)
+    triggerRef(loading)
 
     try {
       const entries = await invoke<ThumbnailBatchEntry[]>('get_thumbnails_batch', {
@@ -96,18 +105,21 @@ export const useThumbnailStore = defineStore('thumbnail', () => {
       return new Set()
     } finally {
       for (const id of uncached) loading.value.delete(id)
-      loading.value = new Set(loading.value)
+      triggerRef(loading)
     }
   }
 
   function revoke(imageId: number) {
     const url = cache.value.get(imageId)
-    if (url) {
-      URL.revokeObjectURL(url)
-      cache.value.delete(imageId)
-      cache.value = new Map(cache.value)
-      const idx = accessOrder.value.indexOf(imageId)
-      if (idx !== -1) accessOrder.value.splice(idx, 1)
+    if (!url) return
+    URL.revokeObjectURL(url)
+    cache.value.delete(imageId)
+    cache.value = new Map(cache.value)
+    const arr = accessOrder.value
+    const idx = arr.indexOf(imageId)
+    if (idx !== -1) {
+      arr.splice(idx, 1)
+      triggerRef(accessOrder)
     }
   }
 
