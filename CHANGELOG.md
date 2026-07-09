@@ -1,3 +1,18 @@
+
+## [0.3.5] — 2026-07-09
+
+### Added
+
+- **Collapsible left navigation sidebar**: Top chevron toggle expands/collapses the 220px sidebar to a 64px icon-rail with hover tooltips. State persists across launches via `pic-mgr-sidebar-collapsed` in `useSettingsStore`. Brand, nav, and theme icons all align on the same x-axis in collapsed mode. Single `:class="{ collapsed: settings.sidebarCollapsed }"` binding drives all layout via scoped CSS — tooltips are CSS-only (`::after { content: attr(data-label) }`), no extra DOM. Default uncollapsed so existing users see no surprise.
+
+- **Sidebar collapse state in settings store**: New `sidebarCollapsed: Ref<boolean>` + `toggleSidebar()` action on `useSettingsStore`, following the existing `localStorage + watch({ immediate: true })` pattern shared by `theme`, `thumbnailSize`, `language`. No new store file — keeps UI prefs in one place.
+
+- **i18n key `nav.toggleSidebar`**: Added in both `en` (`'Toggle sidebar'`) and `zh-CN` (`'切换侧栏'`). Tooltip text reuses existing `nav.home`, `nav.settings`, `settings.dark`, `settings.light` translations — no new strings needed for the icon labels themselves.
+
+### Changed
+
+- **Default window sizing**: `tauri.conf.json` `app.windows[0]` shrunk from 1200×800 to 1080×720, and `center: true` added so the app launches centered on the primary monitor. ~156px of horizontal space recovered in the thumbnail grid. `cargo check` confirms Tauri v2 accepts the new `center` field.
+
 # Changelog
 
 ## [0.3.4] -- 2026-07-08

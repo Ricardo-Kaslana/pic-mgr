@@ -20,7 +20,7 @@ stores/
   tags.ts            — 标签 CRUD、批量操作；fetchTags 单飞 + per-workspace 缓存
   selection.ts       — 多选状态 (支持 Shift 范围选)
   thumbnail.ts       — 缩略图 blob URL 缓存 (shallowRef<Map>, LRU 500)
-  settings.ts        — 主题、缩略图尺寸、语言 (localStorage)
+  settings.ts        — 主题、缩略图尺寸、语言、侧栏折叠 (pic-mgr-sidebar-collapsed) (localStorage)
 
 views/
   WorkspaceHome.vue  — 工作区列表页
@@ -29,7 +29,7 @@ views/
   SettingsPage.vue   — 设置页
 
 components/
-  layout/AppLayout.vue      — 侧边栏 + 主内容区布局
+  layout/AppLayout.vue      — 顶部侧边栏 + 主内容区布局；可折叠到 64px 图标列（chevron 切换，hover tooltip，状态来自 useSettingsStore.sidebarCollapsed）
   workspace/
     WorkspaceCard.vue        — 工作区卡片
     CreateWorkspaceDialog.vue — 新建工作区弹窗
