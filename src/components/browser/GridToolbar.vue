@@ -229,7 +229,7 @@ async function batchMove() {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px 0;
-  padding: 32px 16px 10px 16px;
+  padding: 28px 16px 10px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
