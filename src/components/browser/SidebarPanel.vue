@@ -5,7 +5,7 @@ import { useImageStore } from '../../stores/images'
 import SearchBar from './SearchBar.vue'
 import TagFilter from './TagFilter.vue'
 
-const props = defineProps<{ workspaceId: number }>()
+defineProps<{ workspaceId: number }>()
 const { t } = useI18n()
 
 
@@ -17,19 +17,15 @@ const imageStore = useImageStore()
 // fetchTags store now has a single-flight guard that coalesces both
 // callers into one DB read, so we just rely on that here.
 
-function fetchWithFilters() {
-  imageStore.setPage(1)
-  imageStore.fetchImages(props.workspaceId)
-}
-
+// Filter mutations (tag chip toggle, clear-all) auto-trigger a refetch
+// via the watcher in useImageStore, so we just reset the fields here -
+// no need to call fetchImages manually.
 function clearFilters() {
   imageStore.filters.tag_ids = null
   imageStore.filters.format = null
   imageStore.filters.rating_min = null
   imageStore.filters.date_from = null
   imageStore.filters.date_to = null
-  imageStore.setPage(1)
-  imageStore.fetchImages(props.workspaceId)
 }
 </script>
 
@@ -41,7 +37,6 @@ function clearFilters() {
     </div>
     <TagFilter />
     <div class="filter-actions">
-      <button class="apply-btn" @click="fetchWithFilters">{{ t('sidebar.apply') }}</button>
       <button class="clear-btn" @click="clearFilters">{{ t('sidebar.clear') }}</button>
     </div>
   </div>
@@ -84,18 +79,10 @@ function clearFilters() {
   flex-direction: column;
   gap: 8px;
 }
-.apply-btn {
-  width: 100%;
-  padding: 8px;
-  font-size: 12.5px;
-  font-weight: 600;
-  background: var(--accent);
-  color: #fff;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-}
-.apply-btn:hover { background: var(--accent-hover); box-shadow: 0 2px 12px var(--accent-glow); }
-.apply-btn:active { opacity: 0.9; transform: scale(0.98); }
+/* The .apply-btn styles have been removed along with the button itself:
+   filter mutations now auto-trigger a refetch via the store watcher, so
+   the explicit Apply step was redundant. Kept the .filter-actions wrapper
+   so the Clear button stays pinned to the bottom of the sidebar. */
 .clear-btn {
   width: 100%;
   background: none;

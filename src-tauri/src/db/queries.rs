@@ -586,3 +586,61 @@ fn chrono_now(conn: &Connection) -> String {
     conn.query_row("SELECT datetime('now')", [], |row| row.get(0))
         .unwrap_or_else(|_| "1970-01-01T00:00:00".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::ImageFilters;
+
+    #[test]
+    fn build_filter_clause_with_tag_ids() {
+        let filters = ImageFilters {
+            tag_ids: Some(vec![123]),
+            format: None,
+            rating_min: None,
+            date_from: None,
+            date_to: None,
+            sort_by: None,
+            sort_dir: None,
+        };
+        let (clause, params) = build_filter_clause(&filters);
+        assert!(clause.contains("i.id IN (SELECT image_id FROM image_tags"), "clause: {clause}");
+        assert!(clause.contains("tag_id IN (?1)"), "clause: {clause}");
+        assert!(clause.contains("COUNT(DISTINCT tag_id) = 1"), "clause: {clause}");
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0], rusqlite::types::Value::from(123i64));
+    }
+
+    #[test]
+    fn build_filter_clause_with_multiple_tags_intersect() {
+        let filters = ImageFilters {
+            tag_ids: Some(vec![10, 20]),
+            format: None,
+            rating_min: None,
+            date_from: None,
+            date_to: None,
+            sort_by: None,
+            sort_dir: None,
+        };
+        let (clause, params) = build_filter_clause(&filters);
+        assert!(clause.contains("tag_id IN (?1,?2)"), "clause: {clause}");
+        assert!(clause.contains("COUNT(DISTINCT tag_id) = 2"), "clause: {clause}");
+        assert_eq!(params.len(), 2);
+    }
+
+    #[test]
+    fn build_filter_clause_with_empty_tag_ids_is_noop() {
+        let filters = ImageFilters {
+            tag_ids: Some(vec![]),
+            format: None,
+            rating_min: None,
+            date_from: None,
+            date_to: None,
+            sort_by: None,
+            sort_dir: None,
+        };
+        let (clause, params) = build_filter_clause(&filters);
+        assert!(!clause.contains("image_tags"), "empty tag list should be a no-op: {clause}");
+        assert_eq!(params.len(), 0);
+    }
+}

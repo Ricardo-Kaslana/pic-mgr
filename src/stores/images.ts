@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useSettingsStore } from './settings'
 import type { ImageSummary, ImageDetail, ImagePage, ImageSummaryPage, ImageFilters } from '../types'
@@ -19,13 +19,19 @@ export const useImageStore = defineStore('images', () => {
   const images = ref<ImageSummary[]>([])
   const total = ref(0)
   const page = ref(1)
-  // Default page size bumped from 50 鈫?100 so 100+ image workspaces
+  // Default page size bumped from 50 -> 100 so 100+ image workspaces
   // (the exact case the user is hitting) render in a single round trip
   // instead of forcing a scroll-triggered second fetch.
   const pageSize = ref(100)
   const loading = ref(false)
   const selectedDetail = ref<ImageDetail | null>(null)
   const lastSelectedId = ref<number | null>(null)
+
+  // Track the workspace we most recently fetched for. The auto-refetch
+  // watcher below needs to know which workspace to query when filters
+  // change — components that mutate filters (TagFilter, sort dropdown,
+  // future format/rating/date controls) don't carry the workspaceId.
+  const currentWorkspaceId = ref<number | null>(null)
 
   // sort_by / sort_dir are seeded from the settings store so the user's
   // last sort choice persists across launches. We keep the live values
@@ -44,6 +50,7 @@ export const useImageStore = defineStore('images', () => {
   })
 
   async function fetchImages(workspaceId: number, append = false) {
+    currentWorkspaceId.value = workspaceId
     loading.value = true
     try {
       // Hot path: use the lightweight projection.
@@ -71,7 +78,7 @@ export const useImageStore = defineStore('images', () => {
   }
 
   async function search(workspaceId: number, query: string) {
-    // Search is a fresh result set 鈥?start from page 1. Otherwise
+    // Search is a fresh result set - start from page 1. Otherwise
     // a user sitting on page 5 of the grid would get page 5 of the
     // search results (usually empty).
     page.value = 1
@@ -94,15 +101,17 @@ export const useImageStore = defineStore('images', () => {
 
   function setPage(p: number) { page.value = p }
 
-  function setSort(by: string, dir: string, wsId: number) {
+  function setSort(by: string, dir: string, _wsId: number) {
     filters.sort_by = by
     filters.sort_dir = dir
     // Mirror to the persisted settings ref. The settings store has its
     // own watch that writes the new value to localStorage.
     settings.sortBy = by
     settings.sortDir = dir
-    page.value = 1
-    fetchImages(wsId)
+    // No manual fetchImages(wsId) here - the watcher on `filters`
+    // below auto-refetches when sort_by/sort_dir change. The old
+    // explicit call would double-fire (one from setSort, one from the
+    // watcher) for every sort change.
   }
 
   function reset() {
@@ -111,7 +120,41 @@ export const useImageStore = defineStore('images', () => {
     page.value = 1
     selectedDetail.value = null
     lastSelectedId.value = null
+    // Note: filters are intentionally NOT reset on workspace switch.
+    // Tag IDs are globally unique across workspaces, so a filter like
+    // "show only landscape photos" stays meaningful when the user
+    // navigates between workspaces. If a filter happens to match zero
+    // images in the new workspace, the grid simply shows an empty
+    // state - which is the correct behavior.
   }
 
-  return { images, total, page, pageSize, loading, selectedDetail, lastSelectedId, filters, fetchImages, fetchDetail, search, setPage, setSort, reset }
+  // ── Auto-refetch on any filter mutation ──
+  // Without this watcher, filter changes (tag chip click, future
+  // format/rating/date controls) would mutate `filters` but never
+  // re-query the DB - the grid would keep showing the old result set
+  // until the user manually triggered a fetch. The previous design
+  // required an explicit "Apply Filters" button in the sidebar, which
+  // was both easy to miss and a non-standard pattern (every other
+  // image manager auto-applies on toggle). This watcher makes the
+  // store the single source of truth: any mutation to `filters`
+  // triggers a fresh query, regardless of which UI element made it.
+  //
+  // `flush: 'post'` defers the fetch to after the current reactive
+  // batch settles, so a single user action that mutates multiple
+  // fields (e.g. clearing all filters) only fires one IPC.
+  watch(
+    filters,
+    () => {
+      if (currentWorkspaceId.value == null) return
+      page.value = 1
+      fetchImages(currentWorkspaceId.value)
+    },
+    { deep: true, flush: 'post' }
+  )
+
+  return {
+    images, total, page, pageSize, loading, selectedDetail, lastSelectedId,
+    filters, currentWorkspaceId,
+    fetchImages, fetchDetail, search, setPage, setSort, reset,
+  }
 })

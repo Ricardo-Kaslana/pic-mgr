@@ -1,4 +1,12 @@
 
+## [0.3.14] - 2026-07-10
+
+### Fixed
+
+- **Tag filter (and all other image filters) now auto-apply on toggle.** Previously, clicking a tag chip in the browser sidebar mutated `imageStore.filters.tag_ids` but never triggered a refetch - the grid kept showing the previous (unfiltered) result set until the user also clicked the redundant "Apply Filters" button, which was easy to miss. The Apply button has been removed. Any direct mutation of `imageStore.filters` (tag chip click, sort change, future format/rating/date controls) now auto-triggers a fresh `get_images_light` query through a `watch(filters, ..., { deep: true, flush: 'post' })` inside `useImageStore`. `currentWorkspaceId` is captured on every `fetchImages()` call so the watcher knows which workspace to query. `setSort()` no longer calls `fetchImages` itself (the watcher handles it). Page is reset to 1 on every filter change. `reset()` does NOT clear `filters` - tag IDs are globally unique so a filter like "landscape photos" stays meaningful across workspace switches.
+
+- **Backend test coverage for filter clause SQL generation.** Added 3 unit tests in `src-tauri/src/db/queries.rs` verifying `build_filter_clause` produces correct SQL for: single tag (`tag_id IN (?1)` + `COUNT(DISTINCT tag_id) = 1`), multiple tags intersect (`tag_id IN (?1,?2)` + `COUNT(DISTINCT tag_id) = 2`), and empty tag list (no-op, no image_tags clause).
+
 ## [0.3.13] — 2026-07-10
 
 ### Fixed
