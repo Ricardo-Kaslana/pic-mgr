@@ -59,7 +59,11 @@ fn row_to_workspace(row: &Row) -> Result<Workspace> {
 /// queries. Returns the SQL fragment (with leading "WHERE 1=1" stripped) and
 /// the bound parameters in order, so the caller can splice it into both the
 /// paginated SELECT and the COUNT(*) query.
-fn build_filter_clause(filters: &ImageFilters) -> (String, Vec<rusqlite::types::Value>) {
+/// `param_offset` is the number of parameters already bound in the caller's
+/// SQL before the filter clause is spliced in. Every placeholder `?N` inside
+/// the returned fragment is numbered starting from `param_offset + 1` so that
+/// indices never collide with the caller's own `?1 … ?{param_offset}`.
+fn build_filter_clause(filters: &ImageFilters, param_offset: usize) -> (String, Vec<rusqlite::types::Value>) {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<rusqlite::types::Value> = Vec::new();
 
@@ -69,7 +73,7 @@ fn build_filter_clause(filters: &ImageFilters) -> (String, Vec<rusqlite::types::
             // requested tags — we count the rows per image and keep those
             // whose count equals the number of requested tags.
             let placeholders: Vec<String> = (0..tag_ids.len())
-                .map(|i| format!("?{}", i + 1))
+                .map(|i| format!("?{}", param_offset + i + 1))
                 .collect();
             clauses.push(format!(
                 "i.id IN (SELECT image_id FROM image_tags WHERE tag_id IN ({}) \
@@ -85,19 +89,19 @@ fn build_filter_clause(filters: &ImageFilters) -> (String, Vec<rusqlite::types::
 
     if let Some(ref format) = filters.format {
         params.push(rusqlite::types::Value::from(format.clone()));
-        clauses.push(format!("i.format = ?{}", params.len()));
+        clauses.push(format!("i.format = ?{}", param_offset + params.len()));
     }
     if let Some(rating_min) = filters.rating_min {
         params.push(rusqlite::types::Value::from(rating_min));
-        clauses.push(format!("i.rating >= ?{}", params.len()));
+        clauses.push(format!("i.rating >= ?{}", param_offset + params.len()));
     }
     if let Some(ref date_from) = filters.date_from {
         params.push(rusqlite::types::Value::from(date_from.clone()));
-        clauses.push(format!("i.created_at >= ?{}", params.len()));
+        clauses.push(format!("i.created_at >= ?{}", param_offset + params.len()));
     }
     if let Some(ref date_to) = filters.date_to {
         params.push(rusqlite::types::Value::from(date_to.clone()));
-        clauses.push(format!("i.created_at <= ?{}", params.len()));
+        clauses.push(format!("i.created_at <= ?{}", param_offset + params.len()));
     }
 
     let where_clause = if clauses.is_empty() {
@@ -205,7 +209,7 @@ pub fn get_images(
     page: i32,
     page_size: i32,
 ) -> Result<ImagePage> {
-    let (filter_clause, filter_params) = build_filter_clause(filters);
+    let (filter_clause, filter_params) = build_filter_clause(filters, 1);
     let count_sql = format!(
         "SELECT COUNT(*) FROM images i WHERE i.workspace_id = ?1{}",
         filter_clause
@@ -254,7 +258,7 @@ pub fn get_images_light(
     page: i32,
     page_size: i32,
 ) -> Result<ImageSummaryPage> {
-    let (filter_clause, filter_params) = build_filter_clause(filters);
+    let (filter_clause, filter_params) = build_filter_clause(filters, 1);
     let count_sql = format!(
         "SELECT COUNT(*) FROM images i WHERE i.workspace_id = ?1{}",
         filter_clause
@@ -603,9 +607,9 @@ mod tests {
             sort_by: None,
             sort_dir: None,
         };
-        let (clause, params) = build_filter_clause(&filters);
+        let (clause, params) = build_filter_clause(&filters, 1);
         assert!(clause.contains("i.id IN (SELECT image_id FROM image_tags"), "clause: {clause}");
-        assert!(clause.contains("tag_id IN (?1)"), "clause: {clause}");
+        assert!(clause.contains("tag_id IN (?2)"), "clause: {clause}");
         assert!(clause.contains("COUNT(DISTINCT tag_id) = 1"), "clause: {clause}");
         assert_eq!(params.len(), 1);
         assert_eq!(params[0], rusqlite::types::Value::from(123i64));
@@ -622,8 +626,8 @@ mod tests {
             sort_by: None,
             sort_dir: None,
         };
-        let (clause, params) = build_filter_clause(&filters);
-        assert!(clause.contains("tag_id IN (?1,?2)"), "clause: {clause}");
+        let (clause, params) = build_filter_clause(&filters, 1);
+        assert!(clause.contains("tag_id IN (?2,?3)"), "clause: {clause}");
         assert!(clause.contains("COUNT(DISTINCT tag_id) = 2"), "clause: {clause}");
         assert_eq!(params.len(), 2);
     }
@@ -639,7 +643,7 @@ mod tests {
             sort_by: None,
             sort_dir: None,
         };
-        let (clause, params) = build_filter_clause(&filters);
+        let (clause, params) = build_filter_clause(&filters, 1);
         assert!(!clause.contains("image_tags"), "empty tag list should be a no-op: {clause}");
         assert_eq!(params.len(), 0);
     }
