@@ -190,6 +190,7 @@ CREATE VIRTUAL TABLE images_fts USING fts5(
 | `image_tags` 联结表 | 标准化多对多，避免逗号分隔字符串的查询问题 |
 | `images_fts` FTS5 表 | 支持文件名和备注的全文搜索，性能优于 `LIKE '%...%'` |
 | `indexed_at` 与文件时间解耦 | 索引时间与 EXIF/文件系统的创建时间分离，避免混淆 |
+| **`tags` 表是全局的（无 `workspace_id` 列）** | 整个数据库只有一张标签表，所有工作区共享。决定可见性的是 `image_tags` 成员关系。后端只暴露两条查询路径：`get_tags(workspace_id)`（带 `image_count`，按工作区过滤）驱动侧栏 chip；`get_all_tags()`（无计数，无工作区过滤）驱动 MetadataEditor 的建议下拉和"先查重再创建"的路径。跨工作区复用是显式设计目标（在 A 创建的标签可直接挂到 B 的图，无需重新创建）。删除标签是**全局**的（`image_tags.tag_id REFERENCES tags(id) ON DELETE CASCADE`，一次清掉所有工作区的 `image_tags` 引用）。孤儿标签（零 `image_tags` 引用）`get_tags` 看不到，但 `UNIQUE(name)` 会阻挡同名 `create_tag`，只能由 `delete_workspace` 的孤儿扫描步骤清理。详见 AGENTS.md "Tag model (global, not workspace-scoped)"。 |
 
 ---
 
@@ -228,11 +229,14 @@ CREATE VIRTUAL TABLE images_fts USING fts5(
 
 ### 5.5 标签
 
+`tags` 是全局表，详见 AGENTS.md "Tag model (global, not workspace-scoped)"。后端只暴露以下 4 个 command：
+
 | Command | 参数 | 返回值 | 说明 |
 |---------|------|--------|------|
-| `get_tags` | workspace_id | Vec\<TagWithCount\> | 标签列表 + 使用计数 |
-| `create_tag` | workspace_id, name, color | Tag | 创建新标签 |
-| `delete_tag` | tag_id | () | 删除标签 |
+| `get_tags` | workspace_id | Vec\<TagWithCount\> | 按工作区 INNER JOIN `image_tags`，返回本工作区可见的标签 + 使用计数（驱动侧栏 chip） |
+| `get_all_tags` | — | Vec\<Tag\> | 全局目录，无计数、无工作区过滤（驱动 MetadataEditor 建议下拉 + `addTag()` 去重） |
+| `create_tag` | name, color | Tag | `trim()` 空白 + 拒绝空名；大小写保留；`UNIQUE(name)` 作用于 trim 后的字符串 |
+| `delete_tag` | tag_id | () | 全局删除：通过 `image_tags.tag_id ON DELETE CASCADE` 一次性清掉所有工作区的引用 |
 
 ### 5.6 缩略图
 
@@ -319,7 +323,7 @@ scan_workspace()
 |-------|------|
 | `useWorkspaceStore` | 当前工作区 ID、名称、路径、图片总数 |
 | `useImageStore` | 图片列表（分页/虚拟滚动）、筛选条件、排序方式 |
-| `useTagStore` | 标签库、颜色、使用计数 |
+| `useTagStore` | 全局标签系统的两个状态：`tags`（按工作区过滤 + `image_count`，驱动侧栏）+ `allTags`（全局目录，无计数，驱动 MetadataEditor 建议下拉）；fetchTags / fetchAllTags 各自单飞 + 缓存 |
 | `useSelectionStore` | 当前选中图片集合（多选批量操作） |
 | `useThumbnailStore` | 缩略图生成进度、已缓存列表 |
 | `useSettingsStore` | 用户偏好（主题、缩略图大小、语言等） |

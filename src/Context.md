@@ -17,7 +17,7 @@ style.css            — 全局样式 + CSS 变量 + 统一按钮系统 (暗色/
 stores/
   workspace.ts       — 工作区 CRUD、扫描；单飞 + 缓存的 fetchAll
   images.ts          — 图片列表（ImageSummary[]）、筛选、搜索、分页（默认 pageSize=100）
-  tags.ts            — 标签 CRUD、批量操作；fetchTags 单飞 + per-workspace 缓存
+  tags.ts            — 标签 CRUD、批量操作；fetchTags（按工作区带计数）+ fetchAllTags（全局目录，无计数）各自单飞 + 缓存
   selection.ts       — 多选状态 (支持 Shift 范围选)
   thumbnail.ts       — 缩略图 blob URL 缓存 (shallowRef<Map>, LRU 500)
 
@@ -67,4 +67,15 @@ components/
 - **导出** — JSON/CSV 格式导出，通过 Blob + URL.createObjectURL 下载
 - **交互模式** — 单击查看详情；双击缩略图或点击 hover 显形的展开按钮查看大图（全屏原图）；"选择"按钮进入选择模式（点击选中，全选/取消全选/删除/移动/导出），Escape 退出
 - **工作区删除错误处理** — `WorkspaceHome.vue` 用 `try/catch` 包裹 `store.remove()`，错误通过红色 dismissible banner 显示（i18n key: `workspace.deleteFailed`）
-- **Stores 缓存** — `workspaceStore.fetchAll` 单飞 + 缓存；`tagStore.fetchTags` 单飞 + per-workspace 缓存；避免 BrowserView/SidebarPanel 重复 IPC
+- **Stores 缓存** — `workspaceStore.fetchAll` 单飞 + 缓存；`tagStore.fetchTags`（按工作区带计数）和 `tagStore.fetchAllTags`（全局目录、无计数）各自单飞 + 缓存；避免 BrowserView/SidebarPanel 重复 IPC
+
+## Tag model (global, not workspace-scoped)
+
+The `tags` table has no `workspace_id` column. One global table for the whole DB; `image_tags` membership is what scopes a tag's visibility, not the tag definition itself. The frontend consumes this through two separate state slices on `useTagStore`:
+
+- `tags: Ref<TagWithCount[]>` — workspace-scoped, populated by `fetchTags(workspaceId)`. Drives the sidebar `<TagFilter>` chips and their per-workspace counts.
+- `allTags: Ref<Tag[]>` — global catalogue (no count), populated by `fetchAllTags()`. Drives `MetadataEditor`'s suggestion dropdown and its `addTag()` dedupe-before-create path. Without this slice, attaching an existing global tag from a workspace that doesn't currently use it would crash on `UNIQUE(name)` inside `create_tag()`.
+
+Both fetch methods are single-flight + cached. `allTags` is loaded on `BrowserView.mount` (fire-and-forget, the store dedupes) and also on `MetadataEditor.mount` (deep-link defense). `createTag` and `deleteTag` actions invalidate **both** caches because both slices can shift on every mutation. `reset()` clears everything.
+
+The full design — including cross-workspace reuse, global tag deletion (via right-click on a sidebar chip → context menu → "Delete tag" → confirm), orphan-tag lifecycle, name normalization (`trim()`, empty rejection, case preserved), and the rationale for why `delete_workspace` is a 4-step transaction — lives in `AGENTS.md` under "Tag model (global, not workspace-scoped)". The short version: tag IDs are globally unique, so `imageStore.filters.tag_ids` persists across workspace switches without remapping, which is why `reset()` deliberately does NOT clear `filters`.

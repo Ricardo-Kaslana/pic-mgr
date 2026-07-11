@@ -21,7 +21,7 @@ commands/
   scan.rs        — scan_workspace, rescan_workspace
   images.rs      — get_images, get_images_light, get_image_detail, search_images, find_duplicates
   metadata.rs    — update_notes, update_rating, batch_update_tags, open_in_explorer, delete_image, trash_images, move_images, read_file_bytes
-  tags.rs        — get_tags, create_tag, delete_tag
+  tags.rs        — get_tags, get_all_tags, create_tag, delete_tag
   thumbnail.rs   — get_thumbnail, get_thumbnails_batch, generate_thumbnail, generate_thumbnails_batch
   export.rs      — export_metadata (JSON/CSV, 支持 image_ids 筛选)
 ```
@@ -54,9 +54,24 @@ commands/
 - **批量缩略图** `get_thumbnails_batch` / `generate_thumbnails_batch` 用单次 `WHERE id IN (...)` 查所有图片的 (id, workspace_id, relative_path)，再加一遍 `cache_path(id).exists()` 过滤已缓存条目
 - **Tauri 插件** — tauri-plugin-dialog (文件夹选择/保存对话框), tauri-plugin-fs (文件写入)
 - **批量插入** 每 50 条释放一次数据库锁
-- **工作区删除** 不使用 `ON DELETE CASCADE`，改为手动事务：先删 `image_tags`，再删 `images`（FTS 触发器自动清理），最后删 `workspace`。避免级联链过深触发 `SQLITE_CORRUPT`
+- **工作区删除** 不使用 `ON DELETE CASCADE`，改为手动 4 步事务（`image_tags` → `images` → `workspace` → 孤儿 `tags` 扫描），全程在 `BEGIN`/`COMMIT` 内并带显式 `ROLLBACK` 兜底；避免级联链过深触发 `SQLITE_CORRUPT`
 - **FTS5 触发器** `'delete'` 命令只用 rowid 参数，不加内容列 — 内容校验在级联删除时会因不匹配导致 `SQLITE_ERROR`
 - **数据库迁移** 无框架，在 `mod.rs` 的 `Database::new()` 中通过 `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER IF NOT EXISTS` 更新触发器；`ALTER TABLE ADD COLUMN` 用 `.ok()` 忽略已存在错误
+
+## Tag model (global, not workspace-scoped)
+
+The `tags` table has **no** `workspace_id` column. One global table for the whole DB; the `image_tags` membership table is what scopes a tag's *visibility*. There are exactly two query paths against it:
+
+- `get_tags(workspace_id) → Vec<TagWithCount>` — INNER JOINs through `image_tags` filtered by `workspace_id`. Returns tags that have at least one image in the workspace, with per-workspace `image_count`. Drives the sidebar filter chips.
+- `get_all_tags() → Vec<Tag>` — every row in `tags`, no count, no workspace filter. Drives `MetadataEditor`'s suggestion dropdown and the `addTag()` dedupe-before-create path. Without this query path, attaching a global tag from a workspace that doesn't currently use it would crash on `UNIQUE(name)`.
+
+Other rules baked into `db/queries.rs`:
+
+- Cross-workspace reuse is **explicitly supported**: a tag created in workspace A can attach to images in workspace B without re-creation.
+- Tag deletion is **global**: `image_tags.tag_id REFERENCES tags(id) ON DELETE CASCADE`, so `DELETE FROM tags WHERE id = ?` removes every `image_tags` row referencing it across every workspace.
+- `create_tag` `trim()`s the name before INSERT (rejects empty post-trim with `TagError::EmptyName`); case is preserved on purpose.
+- Orphan tags (`tags` rows with zero `image_tags` references) are invisible to `get_tags()` but still block `create_tag()` via `UNIQUE(name)`. They are cleaned up only as the **4th step** of `delete_workspace`'s transaction (`DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM image_tags)`), keeping the sweep atomic with the workspace cascade. There is no Rust-side command to clean orphans in an existing workspace.
+- Tag IDs are globally unique (`INTEGER PRIMARY KEY AUTOINCREMENT`), which is what allows `imageStore.filters.tag_ids` to persist across workspace switches without remapping.
 
 ## Dependencies
 

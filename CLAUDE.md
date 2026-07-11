@@ -94,6 +94,7 @@ Multi-context — `CONTEXT-MAP.md` at root points to per-context `CONTEXT.md` fi
 - **DedupView** 内嵌为 BrowserView 子组件，非独立路由（避免 Vue Router 嵌套黑屏）
 - **文件日期** `created_at` 存 filesystem mtime；`file_created_at` 存 birth time；`indexed_at` 存入库时间
 - **DB 迁移** 启动时 `ALTER TABLE ADD COLUMN`，`.ok()` 忽略已存在错误
+- **标签系统（全局标签，非按工作区隔离）** — `tags` 表无 `workspace_id` 列；后端只暴露 `get_tags(workspace_id)`（带 `image_count`，按工作区 INNER JOIN `image_tags`，驱动侧栏 chip）和 `get_all_tags()`（无计数、无工作区过滤，驱动 MetadataEditor 建议下拉 + `addTag()` 去重）。`useTagStore` 在 `tags` 之外多维护一个 `allTags: Ref<Tag[]>`。跨工作区复用是显式设计目标。删除标签全局生效（`image_tags.tag_id ON DELETE CASCADE`），UI 入口是侧栏 chip 右键 → 上下文菜单 → "删除标签" → 二次确认。`create_tag` `trim()` 空白 + 拒绝空名（`TagError::EmptyName`），大小写保留。孤儿标签（零 `image_tags` 引用）`get_tags` 看不到但阻挡同名 `create_tag`，只能由 `delete_workspace` 的第 4 步扫掉。完整模型见 `AGENTS.md` "Tag model (global, not workspace-scoped)"。
 - **删除图片** 使用 `trash` crate 移入系统回收站（安全），同时清理 DB 记录 + 缩略图缓存
 - **重新扫描** `workspaceStore.scan()` 调用 `rescan_workspace`（先 `DELETE FROM images WHERE workspace_id = ?`，再扫描），确保已删除文件的孤立 DB 记录被清除；进度事件无缝有效
 - **移动图片** `fs::rename` 移动文件，跨盘 fallback 到 copy+delete；文件名冲突自动加后缀 `_1`/`_2`，更新 DB 记录
