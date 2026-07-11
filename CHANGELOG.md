@@ -1,3 +1,29 @@
+## [0.3.16] — 2026-07-12
+
+### Fixed
+
+- **Cross-workspace tag attach crashed on `UNIQUE(name)`.** In the per-workspace sidebar view (`get_tags` INNER JOINs through `image_tags`), a tag created in workspace A was invisible to workspace B's tag-picker. So when a user typed the tag's name in workspace B's MetadataEditor and hit Enter, `addTag()` looked up `tagStore.tags` (workspace B's slice, which didn't contain it), found nothing, and called `create_tag()` — which then crashed because the name already existed in the global `tags` table. Now the picker reads from a new global catalogue (`get_all_tags`) so cross-workspace reuse works as designed, and `addTag()` first dedupes against that catalogue. The backend exposes `get_all_tags` alongside the existing workspace-scoped `get_tags` (see AGENTS.md "Tag model" for the two query paths).
+
+- **Workspace deletion could leave the connection with a stuck `BEGIN`.** The 4-step transaction (`image_tags` → `images` → `workspace` → orphan-tag sweep) opened with `BEGIN` and committed at the end, but never explicitly rolled back if any of the four DELETEs failed mid-transaction. On partial failure, the `Mutex<Connection>` would return to the pool with an open transaction, poisoning every subsequent command with "cannot start a transaction within a transaction". Rewrote `delete_workspace` to wrap the work in a closure and explicitly `ROLLBACK` (best-effort, swallowing rollback errors so the original cause propagates) before returning `Err`.
+
+- **`deleteTag` cache invalidation bug in `tagStore`.** The store's `deleteTag` action called `invoke('delete_tag')` and dropped the tag from the local `tags.value`, but never reset `loadedWorkspaceId` — so the next `fetchTags()` call short-circuited on its per-workspace cache hit and returned stale data still containing the deleted tag. Now mirrors `createTag`'s pattern: drops from both `tags.value` and `allTags.value`, then clears `loadedWorkspaceId`. The function was previously dead code with no UI entry point; this is a latent-bug fix that doesn't affect current callers but would bite any future UI wired up to it.
+
+- **`create_tag` accepted whitespace-padded names and empty names.** `" 风景 "` and `"风景"` were treated as distinct definitions (the trailing-space variant is also nearly impossible to click out of a chip). Now the Rust layer `trim()`s before INSERT, preserving the `UNIQUE(name)` semantics against the trimmed string. Empty (post-trim) names are rejected at the Rust layer with a new `TagError::EmptyName` variant, because SQLite itself accepts `""` (only `NULL` is rejected) and an empty chip in the sidebar is effectively unremovable through the UI. Case is preserved — "Nature" and "nature" remain distinct on purpose.
+
+### Added
+
+- **Right-click context menu on sidebar tag chips for tag deletion** (`TagFilter.vue`). The previous hover-revealed × button was easy to mis-click while moving the mouse across the sidebar, so it's been replaced with a Teleported context menu (fixed position, scoped CSS to escape the sidebar's `overflow:auto`, click-outside-to-dismiss + `Escape`-to-dismiss). Menu has a single "Delete tag" item; click triggers the existing confirm dialog now updated to state explicitly that the tag is **global** ("其他工作区引用此标签的图片同样会移除"). The chip itself retains a `title="右键管理"` hint for discoverability. No backend changes — the existing `delete_tag` IPC (which cascades through `image_tags` everywhere) does the work; deleting a tag via the sidebar clears the tag from `imageStore.filters.tag_ids` if it was filtering, so the grid doesn't sit on a dead id.
+
+- **`get_all_tags` Tauri command**: returns every row in the global `tags` table (no `image_count`, no workspace filter). Wired into `tagStore.fetchAllTags` with its own single-flight + cache. Loaded on `BrowserView.mount` (fire-and-forget) and also on `MetadataEditor.mount` (deep-link defense). See AGENTS.md "Tag model" for the dual-query design (`get_tags` per workspace with count, `get_all_tags` global for cross-workspace reuse).
+
+- **5 new unit tests in `src-tauri/src/db/queries.rs`**: `get_all_tags_returns_tags_across_workspaces`, `get_all_tags_includes_orphans`, `get_all_tags_empty_db`, `create_tag_trims_surrounding_whitespace`, `create_tag_rejects_whitespace_only_name`. Combined with the existing 6 tag-related tests (`delete_workspace_sweeps_orphan_tag`, `delete_workspace_preserves_shared_tag`, three `build_filter_clause` tests), the tag model is now covered at every level: schema, query, validation, and cascade.
+
+### Documentation
+
+- **AGENTS.md** gains a "Tag model (global, not workspace-scoped)" section documenting the two query paths, cross-workspace reuse, global-only deletion, orphan-tag lifecycle, normalization rules, and tag-ID persistence across workspace switches. The existing workspace-deletion invariant links into it as the one place the cascade and the global-tag nature intersect.
+
+---
+
 ## [0.3.15] - 2026-07-11
 
 ### Fixed

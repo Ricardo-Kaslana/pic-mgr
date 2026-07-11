@@ -8,7 +8,6 @@ This file provides guidance to the AI agent when working with code in this repos
 - DedupView is embedded inside BrowserView as a child component, not a separate route (Vue Router nesting causes black screen).
 - Image dimensions are null at scan time; they get filled only after thumbnail generation.
 - DB migrations run at startup via `ALTER TABLE ADD COLUMN` with `.ok()` to ignore "already exists" errors — no migration framework.
-- **Workspace deletion MUST handle cascade manually**: delete `image_tags` → `images` → `workspace`, plus `DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM image_tags)` to sweep orphan tags whose only references lived in the deleted workspace. The `tags` table is global (no `workspace_id`), so its rows survive the row cascade but still block `create_tag` via `UNIQUE(name)` — leaving a tag un-removable and un-re-creatable. All four steps must run inside a single explicit `BEGIN`/`COMMIT` transaction. Do NOT rely on `ON DELETE CASCADE` for workspace deletion — the cascade chain (FTS triggers + FK constraints) can cause `SQLITE_CORRUPT`.
 - **FTS5 triggers use rowid-only delete**: `INSERT INTO images_fts(images_fts, rowid) VALUES('delete', old.id)` — do NOT include content columns on delete, as content verification mismatches silently break cascade operations.
 - **Grid uses `ImageSummary`, detail uses `ImageRecord`**: the grid (`images` store, `ThumbnailGrid`, `LightboxViewer`) only ever reads `id`, `workspace_id`, `relative_path`, `file_name`, `rating`, and the thumbnail fields. The right-side `ImageInfo` (in `DetailPanel`) reads the full `ImageRecord` from `imageStore.selectedDetail`. Do NOT widen `ImageSummary` to add fields the grid does not render — every added column is paid for on every workspace open.
 - **`thumbUrls` is owned by `thumbStore.cache`, not the grid component**: the local `shallowRef<Map>` in `ThumbnailGrid` is a render-time projection of the store cache. The store cache is the source of truth for blob URL lifetime (LRU). `flushBatch` MUST pull URLs from `thumbStore.cache` for every id in the batch (not just the `loaded` subset that `batchLoad` returns), and `evictAllThumbUrls` MUST NOT revoke URLs still held by `thumbStore.cache` — otherwise cached thumbnails go blank on the next workspace re-entry.
@@ -19,6 +18,32 @@ This file provides guidance to the AI agent when working with code in this repos
 - **Top-of-column areas share an aligned bottom edge in browser view**: the outer sidebar brand area (`.sidebar-brand` in AppLayout.vue), the inner sidebar search section (`.search-section` in SidebarPanel.vue), and the main grid header (`.grid-header` in GridToolbar.vue) must all end at the same y-coordinate, in both expanded and collapsed states. The formula is `total height = padding-top + content + padding-bottom + 1px border-bottom`. The `.search-section` is a `flex-direction: column` wrapper around `<SearchBar>` + `.section-divider`; the divider uses `margin-top: auto` so its 1px line is pinned to the section's bottom (i.e. y = sidebar-panel padding-top + `.search-section` height). When `.app-layout.collapsed` toggles, update grid-header padding and `.search-section` height together - `brand-icon` size shrinks from 34px to 22px and the brand area collapses from 71px to 55px, so the other two areas must scale to match. Current values (post v0.3.13): brand area 71/55, grid-header 67/51 (deliberately ~4px shorter for visual hierarchy), search-section 57/41 (71-14 / 55-14).
 
 - **`imageStore.filters` mutations auto-refetch via store watcher**: any direct mutation of the `filters` reactive object (tag chip toggle, sort change, future format/rating/date controls) triggers a fresh `get_images_light` query through a `watch(filters, ..., { deep: true, flush: 'post' })` inside `useImageStore`. UI components (TagFilter, SidebarPanel, GridToolbar) just mutate the fields and the watcher does the rest. `currentWorkspaceId` is captured on every `fetchImages()` call so the watcher knows which workspace to query. `setSort()` does NOT call `fetchImages` itself anymore — the watcher handles it. Do NOT add an explicit Apply button back to the sidebar — the auto-refetch is the contract. Tag IDs are globally unique, so filters persist across workspace switches (intentional: `reset()` does NOT clear `filters`).
+
+- **Workspace deletion MUST handle cascade manually**: delete `image_tags` → `images` → `workspace`, plus `DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM image_tags)` to sweep orphan tags whose only references lived in the deleted workspace. All four steps run inside a single explicit `BEGIN`/`COMMIT` transaction with explicit `ROLLBACK` on any mid-transaction failure. Do NOT rely on `ON DELETE CASCADE` for workspace deletion — the cascade chain (FTS triggers + FK constraints) can cause `SQLITE_CORRUPT`. See **[Tag model](#tag-model-global-not-workspace-scoped)** below for why the orphan-sweep is necessary (the `tags` table is global, so its rows survive the workspace cascade but still block `create_tag` via `UNIQUE(name)` without the sweep).
+
+## Tag model (global, not workspace-scoped)
+
+The `tags` table has no `workspace_id` column — every tag defined anywhere in the app lives in this single global table. What scopes a tag's *visibility* is its `image_tags` membership, not the tag definition itself.
+
+Two query paths and only two:
+
+1. **Workspace-scoped** — `get_tags(workspace_id)` INNER JOINs `tags` → `image_tags` → `images` filtered by `workspace_id`, returning `(tag, image_count)` for tags that have at least one image in that workspace. Drives the sidebar's filter chips and per-workspace counts.
+2. **Global catalogue** — `get_all_tags()` returns every row in `tags` regardless of workspace or membership (no count). Drives the `MetadataEditor` suggestion dropdown and the `addTag()` dedupe-before-create path. Without this, attaching an existing global tag from a workspace that doesn't currently use it crashes on `UNIQUE(name)` inside `create_tag()`.
+
+Cross-workspace reuse is the explicit design goal: a tag created in workspace A can be attached to images in workspace B without re-creation. `MetadataEditor.addTag()` checks the global catalogue first and only falls through to `createTag()` on a true miss.
+
+Tag deletion is **global**. `image_tags.tag_id REFERENCES tags(id) ON DELETE CASCADE`, so `DELETE FROM tags WHERE id = ?` removes every `image_tags` row referencing it across every workspace in one stroke. UI entry point: right-click a sidebar chip → context menu → "Delete tag" → confirm. There is **no** "delete this tag from this workspace only" operation.
+
+Orphan tags are `tags` rows with zero `image_tags` references. They are:
+- invisible to `get_tags()` (INNER JOIN drops them) but still occupy a row,
+- blockers for `create_tag()` via `UNIQUE(name)`,
+- cleanable only by `delete_workspace`, which sweeps them as the 4th step of its transaction.
+
+There is **no UI to clean orphan tags inside an existing workspace** — if a user wants to reclaim an orphan name they must delete a workspace that referenced it (which sweeps the orphan as a side effect). Do not add a "delete orphans" UI without first ensuring the affected tag IDs are removed from any active `imageStore.filters.tag_ids`.
+
+Tag name normalization: `create_tag` `trim()`s whitespace before INSERT and rejects empty post-trim names with `TagError::EmptyName`. Case is **preserved** on purpose — "Nature" and "nature" are distinct tag definitions.
+
+Tag IDs are globally unique (`INTEGER PRIMARY KEY AUTOINCREMENT`), which is what allows `imageStore.filters.tag_ids` to persist across workspace switches without remapping.
 
 ## Build & Check
 
