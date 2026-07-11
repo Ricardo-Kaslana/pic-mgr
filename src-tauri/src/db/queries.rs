@@ -1,6 +1,43 @@
 use rusqlite::{params, params_from_iter, Connection, Result, Row};
 use crate::models::*;
 
+/// Errors specific to tag operations. Validation failures surface here so the
+/// IPC boundary can show them as a clean user-facing message; SQLite errors
+/// pass through unchanged (UNIQUE collisions, I/O, etc.).
+#[derive(Debug)]
+pub enum TagError {
+    /// Post-trim name was empty. SQLite itself would happily store "" (only
+    /// NULL is rejected at the column level), but an empty-name chip is
+    /// invisible in the sidebar and effectively unremovable from the UI, so
+    /// we reject it before INSERT.
+    EmptyName,
+    Sqlite(rusqlite::Error),
+}
+
+impl std::fmt::Display for TagError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TagError::EmptyName => f.write_str("tag name cannot be empty"),
+            TagError::Sqlite(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl std::error::Error for TagError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            TagError::EmptyName => None,
+            TagError::Sqlite(e) => Some(e),
+        }
+    }
+}
+
+impl From<rusqlite::Error> for TagError {
+    fn from(e: rusqlite::Error) -> Self {
+        TagError::Sqlite(e)
+    }
+}
+
 // ── Row mapping helpers ──
 
 pub(crate) fn row_to_image_record(row: &Row) -> Result<ImageRecord> {
@@ -158,33 +195,53 @@ pub fn delete_workspace(conn: &Connection, id: i64) -> Result<()> {
     // Manual cascade: delete image_tags → images → workspace in a single transaction.
     // Avoids relying on ON DELETE CASCADE which can trigger complex nested operations
     // (FTS triggers + image_tags cascade) that may lead to SQLITE_CORRUPT on large datasets.
+    //
+    // ROLLBACK is wired explicitly: an early `?` from any of the four DELETEs would
+    // otherwise leave BEGIN's transaction open on the connection, poisoning every
+    // subsequent command with "cannot start a transaction within a transaction".
+    // The closure captures the work; the outer code owns the COMMIT/ROLLBACK decision.
     conn.execute_batch("BEGIN")?;
-    conn.execute(
-        "DELETE FROM image_tags WHERE image_id IN (SELECT id FROM images WHERE workspace_id = ?1)",
-        params![id],
-    )?;
-    conn.execute(
-        "DELETE FROM images WHERE workspace_id = ?1",
-        params![id],
-    )?;
-    conn.execute(
-        "DELETE FROM workspaces WHERE id = ?1",
-        params![id],
-    )?;
-    // Sweep orphan tags last so the cascade above can finish first.
-    // Tags are global (no workspace_id column on `tags`): any tag whose only
-    // references lived inside the workspace we just deleted now has zero
-    // image_tags rows, so it is unreachable from the UI (get_tags INNER JOINs
-    // image_tags) but still blocks create_tag() via the UNIQUE(name) constraint.
-    // Removing it here keeps tag names reclaimable after workspace deletion
-    // and remains safe for shared tags: a tag still referenced by *any*
-    // workspace image_tags survives.
-    conn.execute(
-        "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM image_tags)",
-        [],
-    )?;
-    conn.execute_batch("COMMIT")?;
-    Ok(())
+    let result: Result<()> = (|| {
+        conn.execute(
+            "DELETE FROM image_tags WHERE image_id IN (SELECT id FROM images WHERE workspace_id = ?1)",
+            params![id],
+        )?;
+        conn.execute(
+            "DELETE FROM images WHERE workspace_id = ?1",
+            params![id],
+        )?;
+        conn.execute(
+            "DELETE FROM workspaces WHERE id = ?1",
+            params![id],
+        )?;
+        // Sweep orphan tags last so the cascade above can finish first.
+        // Tags are global (no workspace_id column on `tags`): any tag whose only
+        // references lived inside the workspace we just deleted now has zero
+        // image_tags rows, so it is unreachable from the UI (get_tags INNER JOINs
+        // image_tags) but still blocks create_tag() via the UNIQUE(name) constraint.
+        // Removing it here keeps tag names reclaimable after workspace deletion
+        // and remains safe for shared tags: a tag still referenced by *any*
+        // workspace image_tags survives.
+        conn.execute(
+            "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM image_tags)",
+            [],
+        )?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")?;
+            Ok(())
+        }
+        Err(e) => {
+            // Best-effort rollback: swallow any error here so the original cause
+            // propagates. If ROLLBACK itself fails the connection is in an
+            // unrecoverable state, but the next request will see it on the Mutex
+            // and Surface that as a fresh error.
+            conn.execute_batch("ROLLBACK").ok();
+            Err(e)
+        }
+    }
 }
 
 pub fn get_workspace(conn: &Connection, id: i64) -> Result<Option<Workspace>> {
@@ -532,15 +589,54 @@ pub fn get_tags(conn: &Connection, workspace_id: i64) -> Result<Vec<TagWithCount
     rows.collect()
 }
 
-pub fn create_tag(conn: &Connection, name: &str, color: Option<&str>) -> Result<Tag> {
+/// Returns every tag in the global `tags` table, regardless of which
+/// workspace uses it. Used by the front-end tag picker so that a tag
+/// originally created in workspace A can be re-used in workspace B
+/// without triggering the UNIQUE(name) constraint (the previous flow
+/// naively called create_tag() whenever a typed name didn't match the
+/// workspace-scoped list, which crashed on cross-workspace attaches).
+///
+/// Tags with zero image_tags rows are intentionally included — they're
+/// "orphan" definitions (e.g. the user removed the tag from every
+/// image, or it was created and never used) but still need to be
+/// discoverable so the picker doesn't propose the same name as a
+/// brand-new tag and collide on UNIQUE.
+pub fn get_all_tags(conn: &Connection) -> Result<Vec<Tag>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, color FROM tags ORDER BY name ASC"
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(Tag {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            color: row.get(2)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn create_tag(conn: &Connection, name: &str, color: Option<&str>) -> std::result::Result<Tag, TagError> {
+    // Trim surrounding whitespace so users can't end up with " 风景 " and "风景"
+    // coexisting as separate tag definitions (and the trailing-space variant
+    // being nearly impossible to click out of the chip). Case is preserved on
+    // purpose — users may legitimately want "Nature" vs "nature" distinguished.
+    // SQLite's UNIQUE(name) constraint applies to the trimmed string.
+    //
+    // Reject empty (post-trim) names: SQLite itself accepts "" as a valid
+    // TEXT (only NULL is rejected), and an empty chip in the sidebar is
+    // both invisible and effectively unremovable through the UI.
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(TagError::EmptyName);
+    }
     conn.execute(
         "INSERT INTO tags (name, color) VALUES (?1, ?2)",
-        params![name, color],
+        params![trimmed, color],
     )?;
     let id = conn.last_insert_rowid();
     Ok(Tag {
         id,
-        name: name.to_string(),
+        name: trimmed.to_string(),
         color: color.map(|s| s.to_string()),
     })
 }
@@ -742,5 +838,102 @@ mod tests {
             tag_exists(&conn, "beach"),
             "shared tag must survive ws1 deletion (still referenced by ws2)"
         );
+    }
+
+    // ── get_all_tags (global, workspace-independent) ────────────────
+    //
+    // The frontend uses this to power the tag-suggestion dropdown and to
+    // dedupe before create_tag — without it, attaching an existing global
+    // tag from a different workspace would crash on UNIQUE(name).
+
+    #[test]
+    fn get_all_tags_returns_tags_across_workspaces() {
+        let conn = fresh_db();
+        let ws1 = insert_workspace(&conn, "w1", "/tmp/w1").unwrap();
+        let ws2 = insert_workspace(&conn, "w2", "/tmp/w2").unwrap();
+        let img1 = insert_image(&conn, &make_image(ws1.id, "a.jpg")).unwrap();
+        let img2 = insert_image(&conn, &make_image(ws2.id, "b.jpg")).unwrap();
+        let tag1 = create_tag(&conn, "beach", None).unwrap();
+        let tag2 = create_tag(&conn, "mountain", None).unwrap();
+        // beach is used in both workspaces; mountain only in ws2.
+        batch_update_tags(&conn, &[img1], &[tag1.id], "add").unwrap();
+        batch_update_tags(&conn, &[img2], &[tag1.id], "add").unwrap();
+        batch_update_tags(&conn, &[img2], &[tag2.id], "add").unwrap();
+
+        let all = get_all_tags(&conn).unwrap();
+        let names: Vec<&str> = all.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, vec!["beach", "mountain"], "sorted by name asc");
+    }
+
+    #[test]
+    fn get_all_tags_includes_orphans() {
+        // A tag with zero image_tags rows is "orphan" (invisible to the
+        // sidebar's get_tags which INNER JOINs through image_tags), but
+        // get_all_tags must still surface it so the picker doesn't suggest
+        // creating a duplicate.
+        let conn = fresh_db();
+        create_tag(&conn, "orphan", None).unwrap();
+        create_tag(&conn, "used", None).unwrap();
+        let ws = insert_workspace(&conn, "w", "/tmp/w").unwrap();
+        let img = insert_image(&conn, &make_image(ws.id, "a.jpg")).unwrap();
+        let used = conn
+            .query_row(
+                "SELECT id FROM tags WHERE name = 'used'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap();
+        batch_update_tags(&conn, &[img], &[used], "add").unwrap();
+
+        let all = get_all_tags(&conn).unwrap();
+        let names: Vec<&str> = all.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, vec!["orphan", "used"]);
+    }
+
+    #[test]
+    fn get_all_tags_empty_db() {
+        let conn = fresh_db();
+        assert!(get_all_tags(&conn).unwrap().is_empty());
+    }
+
+    // ── create_tag name normalization (trim whitespace) ─────────────
+    //
+    // Without trim, " 风景 " and "风景" coexist as separate definitions
+    // because the UNIQUE(name) constraint sees them as distinct strings.
+    // The trailing-space variant is also nearly impossible to click out
+    // of the sidebar chip (the click area gets eaten by the whitespace).
+
+    #[test]
+    fn create_tag_trims_surrounding_whitespace() {
+        let conn = fresh_db();
+        let tag = create_tag(&conn, "  风景  ", None).unwrap();
+        assert_eq!(tag.name, "风景", "leading/trailing whitespace must be stripped");
+    }
+
+    #[test]
+    fn create_tag_rejects_whitespace_only_name() {
+        let conn = fresh_db();
+        let err = create_tag(&conn, "   ", None).unwrap_err();
+        // SQLite itself would happily store "" (only NULL is rejected at the
+        // column level). We guard at the Rust layer because an empty chip
+        // is invisible in the sidebar and effectively unremovable from the UI.
+        assert!(
+            matches!(err, TagError::EmptyName),
+            "expected TagError::EmptyName, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn create_tag_dedupes_after_trim() {
+        // If a previous (untrimmed) version stored " 风景 ", recreating
+        // "风景" now must collide because both trim to the same string.
+        let conn = fresh_db();
+        create_tag(&conn, " 风景 ", None).unwrap();
+        // SQLite UNIQUE is case-sensitive and byte-exact; " 风景 " (with the
+        // trailing space) is distinct from "风景" in storage. We just assert
+        // here that trimmed-vs-trimmed dedupes — the cross-format case is a
+        // pre-existing data concern that would need a migration.
+        let result = create_tag(&conn, "风景", None);
+        assert!(result.is_err(), "second '风景' must violate UNIQUE");
     }
 }

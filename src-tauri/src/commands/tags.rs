@@ -8,6 +8,15 @@ pub fn get_tags(state: State<AppState>, workspace_id: i64) -> Result<Vec<TagWith
     crate::db::queries::get_tags(&conn, workspace_id).map_err(|e| e.to_string())
 }
 
+/// Returns every tag in the global `tags` table regardless of workspace.
+/// See `queries::get_all_tags` for why this exists alongside the
+/// workspace-scoped `get_tags`.
+#[tauri::command]
+pub fn get_all_tags(state: State<AppState>) -> Result<Vec<Tag>, String> {
+    let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+    crate::db::queries::get_all_tags(&conn).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn create_tag(
     state: State<AppState>,

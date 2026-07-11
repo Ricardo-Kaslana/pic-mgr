@@ -52,6 +52,7 @@ fn main() {
             commands::metadata::move_images,
             commands::metadata::read_file_bytes,
             commands::tags::get_tags,
+            commands::tags::get_all_tags,
             commands::tags::create_tag,
             commands::tags::delete_tag,
             commands::thumbnail::get_thumbnail,
