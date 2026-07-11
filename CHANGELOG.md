@@ -1,3 +1,8 @@
+## [0.3.15] - 2026-07-11
+
+### Fixed
+
+- **Orphan tag cleanup on workspace delete.** Previously `delete_workspace` cascaded `image_tags` → `images` → `workspaces` in a single transaction but never touched the global `tags` table, so a workspace delete left rows whose only references lived inside the deleted workspace. Those rows were unreachable from `get_tags` (which INNER JOINs through `image_tags`) but still blocked `create_tag` via `UNIQUE(name)` — leaving the user stuck unable to add or recreate a tag they once used. Append `DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM image_tags)` to the existing transaction so the sweep is atomic with the cascade. Tags still referenced by another workspace's `image_tags` survive untouched. Adds 2 regression tests in `src-tauri/src/db/queries.rs` (`delete_workspace_sweeps_orphan_tag`, `delete_workspace_preserves_shared_tag`) and refreshes the AGENTS invariant.
 
 ## [0.3.14] - 2026-07-10
 

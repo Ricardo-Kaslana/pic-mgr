@@ -171,6 +171,18 @@ pub fn delete_workspace(conn: &Connection, id: i64) -> Result<()> {
         "DELETE FROM workspaces WHERE id = ?1",
         params![id],
     )?;
+    // Sweep orphan tags last so the cascade above can finish first.
+    // Tags are global (no workspace_id column on `tags`): any tag whose only
+    // references lived inside the workspace we just deleted now has zero
+    // image_tags rows, so it is unreachable from the UI (get_tags INNER JOINs
+    // image_tags) but still blocks create_tag() via the UNIQUE(name) constraint.
+    // Removing it here keeps tag names reclaimable after workspace deletion
+    // and remains safe for shared tags: a tag still referenced by *any*
+    // workspace image_tags survives.
+    conn.execute(
+        "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM image_tags)",
+        [],
+    )?;
     conn.execute_batch("COMMIT")?;
     Ok(())
 }
@@ -646,5 +658,89 @@ mod tests {
         let (clause, params) = build_filter_clause(&filters, 1);
         assert!(!clause.contains("image_tags"), "empty tag list should be a no-op: {clause}");
         assert_eq!(params.len(), 0);
+    }
+
+    // ── Orphan tag cleanup on workspace delete ────────────────────────
+    //
+    // Tags are global (the `tags` table has no workspace_id column), so a
+    // workspace deletion must also sweep tags whose only references lived
+    // inside the deleted workspace. Otherwise the leftover rows are
+    // unreachable from get_tags (which INNER JOINs through image_tags) but
+    // still block create_tag via the UNIQUE(name) constraint — a deadlock
+    // where the tag cannot be re-added and never reappears in the UI.
+
+    fn fresh_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(crate::db::schema::CREATE_TABLES_SQL)
+            .expect("apply schema");
+        conn
+    }
+
+    fn make_image(workspace_id: i64, name: &str) -> ImageRecord {
+        ImageRecord {
+            id: 0,
+            workspace_id,
+            relative_path: name.to_string(),
+            file_name: name.to_string(),
+            file_size: None,
+            file_hash: None,
+            width: None,
+            height: None,
+            format: None,
+            thumbnail_path: None,
+            notes: None,
+            rating: None,
+            created_at: None,
+            file_created_at: None,
+            updated_at: "1970-01-01T00:00:00".to_string(),
+            indexed_at: "1970-01-01T00:00:00".to_string(),
+            last_viewed_at: None,
+        }
+    }
+
+    fn tag_exists(conn: &Connection, name: &str) -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM tags WHERE name = ?1",
+            params![name],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false)
+    }
+
+    #[test]
+    fn delete_workspace_sweeps_orphan_tag() {
+        let conn = fresh_db();
+        let ws = insert_workspace(&conn, "w1", "/tmp/w1").unwrap();
+        let img = insert_image(&conn, &make_image(ws.id, "a.jpg")).unwrap();
+        let tag = create_tag(&conn, "beach", None).unwrap();
+        batch_update_tags(&conn, &[img], &[tag.id], "add").unwrap();
+
+        assert!(tag_exists(&conn, "beach"), "tag should exist before delete");
+        delete_workspace(&conn, ws.id).unwrap();
+        assert!(!tag_exists(&conn, "beach"), "orphan tag must be removed");
+
+        // After cleanup the same name can be recreated — this is the
+        // user-visible failure mode we are guarding against.
+        let again = create_tag(&conn, "beach", None)
+            .expect("re-creating 'beach' should succeed after sweep");
+        assert!(again.id > 0);
+    }
+
+    #[test]
+    fn delete_workspace_preserves_shared_tag() {
+        let conn = fresh_db();
+        let ws1 = insert_workspace(&conn, "w1", "/tmp/w1").unwrap();
+        let ws2 = insert_workspace(&conn, "w2", "/tmp/w2").unwrap();
+        let img1 = insert_image(&conn, &make_image(ws1.id, "a.jpg")).unwrap();
+        let img2 = insert_image(&conn, &make_image(ws2.id, "b.jpg")).unwrap();
+        let tag = create_tag(&conn, "beach", None).unwrap();
+        batch_update_tags(&conn, &[img1, img2], &[tag.id], "add").unwrap();
+
+        delete_workspace(&conn, ws1.id).unwrap();
+        assert!(
+            tag_exists(&conn, "beach"),
+            "shared tag must survive ws1 deletion (still referenced by ws2)"
+        );
     }
 }
