@@ -76,6 +76,12 @@ export default {
     clearTags: 'Clear',
     noTags: 'No tags yet',
   },
+  tag: {
+    rightClickHint: 'Right-click for options',
+    delete: 'Delete tag',
+    confirmDelete: 'Delete tag "{name}"? {count} image(s) in this workspace will lose it (the tag is global — other workspaces that reference it are also affected).',
+    deleteFailed: 'Failed to delete tag: {error}',
+  },
   detail: {
     title: 'Image Details',
     noPreview: 'No preview',

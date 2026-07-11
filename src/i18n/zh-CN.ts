@@ -74,6 +74,12 @@ export default {
     clearTags: '清除',
     noTags: '暂无标签',
   },
+  tag: {
+    rightClickHint: '右键管理',
+    delete: '删除标签',
+    confirmDelete: '确定删除标签 "{name}"？当前工作区中 {count} 张图片将失去此标签（全局生效，其他工作区引用此标签的图片同样会移除）。',
+    deleteFailed: '删除标签失败：{error}',
+  },
   detail: {
     title: '图片详情',
     noPreview: '暂无预览',

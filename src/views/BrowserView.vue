@@ -84,6 +84,11 @@ onMounted(async () => {
     // Tag loading is now safe to fire-and-forget: the store dedupes
     // concurrent calls and only hits the DB once per workspace.
     tagStore.fetchTags(workspaceId.value)
+    // Global tag catalogue — powers the suggestion dropdown in
+    // MetadataEditor. Same single-flight treatment so a workspace
+    // switch that lands here while the previous one was still loading
+    // coalesces into one IPC.
+    tagStore.fetchAllTags()
 
     unlistenScan = await listen<ScanProgress>('scan-progress', (event) => {
       scanProgress.value = event.payload

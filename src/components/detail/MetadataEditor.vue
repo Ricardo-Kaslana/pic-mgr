@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 import { useTagStore } from '../../stores/tags'
@@ -47,13 +47,38 @@ async function removeTag(tagId: number) {
 const newTagName = ref('')
 const showSuggestions = ref(false)
 
-// 已有标签中，过滤掉已在图片上的标签，并按输入内容匹配
+// Make sure the global catalogue is loaded the first time the picker
+// opens — BrowserView fetches it on mount but a deep-link straight into
+// a workspace that skips BrowserView (rare but possible) would otherwise
+// leave suggestions empty.
+onMounted(() => { tagStore.fetchAllTags() })
+
+// Suggestion list merges two sources, in priority order:
+//   1. Tags already used in this workspace (familiar to the user, more
+//      likely matches their mental model)
+//   2. All other global tags (catches cross-workspace tags that don't
+//      appear in this workspace's count list)
+// Both lists exclude tags already attached to the image. Both are
+// filtered by the typed query if there is one. The picker used to only
+// show workspace-scoped tags — which meant a user could type the name
+// of an existing global tag, see "no suggestions", hit Enter, and
+// crash on UNIQUE(name) inside create_tag().
 const suggestions = computed(() => {
   const existingIds = new Set(props.detail.tags.map(t => t.id))
   const query = newTagName.value.trim().toLowerCase()
-  return tagStore.tags
+  const matches = (name: string) =>
+    !query || name.toLowerCase().includes(query)
+
+  const inWorkspace = tagStore.tags
     .filter(t => !existingIds.has(t.id))
-    .filter(t => !query || t.name.toLowerCase().includes(query))
+    .filter(t => matches(t.name))
+
+  const inWorkspaceIds = new Set(inWorkspace.map(t => t.id))
+  const fromGlobal = tagStore.allTags
+    .filter(t => !existingIds.has(t.id) && !inWorkspaceIds.has(t.id))
+    .filter(t => matches(t.name))
+
+  return [...inWorkspace, ...fromGlobal]
 })
 
 async function addTagById(tagId: number, _tagName: string) {
@@ -69,12 +94,35 @@ async function addTagById(tagId: number, _tagName: string) {
 }
 
 async function addTag() {
-  if (!newTagName.value.trim()) return
-  const existing = tagStore.tags.find(t => t.name === newTagName.value.trim())
+  const trimmed = newTagName.value.trim()
+  if (!trimmed) return
+  // Check the GLOBAL catalogue first, not just the workspace-scoped
+  // slice. The old code only checked tagStore.tags, which (because
+  // get_tags is INNER JOINed on the workspace) is empty for any tag
+  // that hasn't been used in this workspace yet — so cross-workspace
+  // attaches would fall through to create_tag() and crash on
+  // UNIQUE(name). Backend create_tag also trims+rejects empty, but
+  // we trim here too to keep the matching below consistent.
+  const existing = tagStore.allTags.find(t => t.name === trimmed)
+    ?? tagStore.tags.find(t => t.name === trimmed)
   let tagId = existing?.id
   if (!tagId) {
-    const tag = await tagStore.createTag(newTagName.value.trim())
-    tagId = tag.id
+    try {
+      const tag = await tagStore.createTag(trimmed)
+      tagId = tag.id
+    } catch (e: any) {
+      // Race condition: another component created the same tag between
+      // our catalogue read and our create. Re-read the global list
+      // (which the store invalidates on createTag anyway) and pick the
+      // matching id.
+      await tagStore.fetchAllTags(true)
+      const raced = tagStore.allTags.find(t => t.name === trimmed)
+      if (!raced) {
+        console.error('[MetadataEditor] createTag failed and no existing tag found:', e)
+        return
+      }
+      tagId = raced.id
+    }
   }
   await invoke('batch_update_tags', {
     imageIds: [props.detail.id],
