@@ -26,6 +26,13 @@ export default {
     browse: 'Browse',
     browseFolderTitle: 'Select Image Folder',
     deleteFailed: 'Failed to delete workspace: {error}',
+    syncing: 'Syncing...',
+    scannedDone: 'Scan complete',
+    advancedReset: 'Advanced',
+    fullResetConfirm: 'Full reset will erase all tags, ratings, and notes in this workspace. Continue?',
+    fullResetConfirm2: 'This action cannot be undone. Confirm full reset?',
+    fullResetFinal: 'Really full-reset? This action cannot be undone.',
+    syncConfirm: 'Sync will reconcile files on disk with this workspace. New files will be added, modified files will be updated, and files missing from disk will be listed for your review. Tags and ratings are preserved.',
   },
   browser: {
     imageCount: '{count} images',

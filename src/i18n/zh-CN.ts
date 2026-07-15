@@ -26,6 +26,13 @@ export default {
     browse: '浏览',
     browseFolderTitle: '选择图片文件夹',
     deleteFailed: '删除工作区失败：{error}',
+    syncing: '同步中...',
+    scannedDone: '扫描完成',
+    advancedReset: '高级',
+    fullResetConfirm: '完整重置会清空此工作区的全部标签、评分、备注，确定继续？',
+    fullResetConfirm2: '此操作不可撤销。再次确认要完整重置吗？',
+    fullResetFinal: '真的要完整重置吗？此操作不可撤销。',
+    syncConfirm: '同步会将磁盘上的文件与工作区对账，新增文件、更新已修改的文件，并把磁盘上已消失的文件列出来由你确认。标签和评分等用户数据会保留。',
   },
   browser: {
     imageCount: '{count} 张图片',

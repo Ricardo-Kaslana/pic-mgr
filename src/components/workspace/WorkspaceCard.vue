@@ -1,16 +1,27 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { Workspace } from '../../types'
 
-defineProps<{
+const props = defineProps<{
   workspace: Workspace
   scanning?: boolean
   justScanned?: boolean
+  syncing?: boolean
 }>()
 const emit = defineEmits<{
   select: [id: number]
   delete: [id: number]
   rescan: [id: number]
+  fullReset: [id: number]
 }>()
+
+const { t } = useI18n()
+
+function confirmFullReset() {
+  if (!confirm(t('workspace.fullResetConfirm'))) return
+  if (!confirm(t('workspace.fullResetConfirm2'))) return
+  emit('fullReset', props.workspace.id)
+}
 </script>
 
 <template>
@@ -30,12 +41,20 @@ const emit = defineEmits<{
       </div>
     </div>
     <div class="card-actions">
+      <details class="advanced-menu" @click.stop>
+        <summary :title="t('workspace.advancedReset')">...</summary>
+        <div class="advanced-actions">
+          <button class="danger-link" type="button" @click="confirmFullReset">
+            {{ t('workspace.fullResetConfirm') }}
+          </button>
+        </div>
+      </details>
       <button
         class="action-btn rescan-btn"
-        :class="{ scanning, done: justScanned }"
-        :disabled="scanning"
+        :class="{ scanning: scanning || syncing, done: justScanned }"
+        :disabled="scanning || syncing"
         @click.stop="emit('rescan', workspace.id)"
-        :title="scanning ? '扫描中...' : justScanned ? '扫描完成' : '重新扫描'"
+        :title="(scanning || syncing) ? t('workspace.syncing') : justScanned ? t('workspace.scannedDone') : t('workspace.rescan')"
       >
         <svg v-if="justScanned" class="icon-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"/>
@@ -49,7 +68,7 @@ const emit = defineEmits<{
       <button
         class="action-btn danger"
         @click.stop="emit('delete', workspace.id)"
-        title="删除工作区"
+        :title="t('workspace.delete')"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"/>
@@ -123,6 +142,7 @@ const emit = defineEmits<{
   gap: 4px;
   opacity: 0;
   transition: opacity var(--transition-fast);
+  align-items: center;
 }
 .card:hover .card-actions { opacity: 1; }
 .card:has(.scanning) .card-actions,
@@ -170,4 +190,42 @@ const emit = defineEmits<{
   0% { transform: scale(0); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+.advanced-menu { position: relative; }
+.advanced-menu summary {
+  list-style: none;
+  cursor: pointer;
+  width: 34px; height: 34px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  font-size: 14px;
+  user-select: none;
+}
+.advanced-menu summary::-webkit-details-marker { display: none; }
+.advanced-menu summary:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border); }
+.advanced-actions {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  min-width: 220px;
+}
+.danger-link {
+  background: none; border: none; padding: 0;
+  color: var(--danger); cursor: pointer; font-size: 12px;
+  text-decoration: none;
+  text-align: left;
+  width: 100%;
+}
+.danger-link:hover { text-decoration: underline; }
 </style>
