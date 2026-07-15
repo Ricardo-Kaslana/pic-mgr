@@ -4,8 +4,8 @@ pub mod reconcile;
 use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
+use crate::scanner::reconcile::FsEntry;
 use crate::models::ImageRecord;
-
 const SUPPORTED_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif",
 ];
@@ -95,6 +95,40 @@ fn collect_image_files(dir: &Path, results: &mut Vec<std::path::PathBuf>) {
             results.push(path);
         }
     }
+}
+
+pub fn scan_directory(_workspace_id: i64, workspace_path: &Path) -> Vec<FsEntry> {
+    let mut image_files = Vec::new();
+    collect_image_files(workspace_path, &mut image_files);
+
+    image_files
+        .into_iter()
+        .filter_map(|path| {
+            let metadata = fs::metadata(&path).ok()?;
+            let relative = path.strip_prefix(workspace_path).unwrap_or(&path);
+            let relative_str = relative.to_string_lossy().to_string();
+            let file_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+            let format = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase());
+            let file_size = metadata.len() as i64;
+            let mtime = file_modified_at(&metadata)?;
+            let file_created_at = file_created_at(&metadata);
+            Some(FsEntry {
+                relative_path: relative_str,
+                file_name,
+                size: file_size,
+                mtime,
+                file_created_at,
+                format,
+            })
+        })
+        .collect()
 }
 
 pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> Vec<ImageRecord> {
