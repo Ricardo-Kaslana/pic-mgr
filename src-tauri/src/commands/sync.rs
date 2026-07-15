@@ -86,6 +86,17 @@ pub fn sync_workspace(
     // joining back to fetch rating / last_viewed_at / tag_names for the UI.
     let deleted_candidates = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+        // Prepare the tag-name statement once outside the loop. The query_row
+        // calls below use the primary key index so per-row cost is trivial,
+        // but preparing per-iteration was noticeable on >50 deletions.
+        let mut tag_stmt = conn
+            .prepare(
+                "SELECT t.name FROM tags t
+                 INNER JOIN image_tags it ON t.id = it.tag_id
+                 WHERE it.image_id = ?1
+                 ORDER BY t.name",
+            )
+            .map_err(|e| e.to_string())?;
         let mut out = Vec::with_capacity(plan.deleted.len());
         for (rel, db_entry) in &plan.deleted {
             let rating: Option<i32> = conn
@@ -103,22 +114,11 @@ pub fn sync_workspace(
                 )
                 .ok()
                 .flatten();
-            let tag_names: Vec<String> = {
-                let mut stmt = conn
-                    .prepare(
-                        "SELECT t.name FROM tags t
-                         INNER JOIN image_tags it ON t.id = it.tag_id
-                         WHERE it.image_id = ?1
-                         ORDER BY t.name",
-                    )
-                    .map_err(|e| e.to_string())?;
-                let rows = stmt
-                    .query_map(params![db_entry.id], |row| {
-                        row.get::<_, String>(0)
-                    })
-                    .map_err(|e| e.to_string())?;
-                rows.filter_map(|r| r.ok()).collect()
-            };
+            let tag_names: Vec<String> = tag_stmt
+                .query_map(params![db_entry.id], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .filter_map(|r| r.ok())
+                .collect();
             out.push(DeletedCandidate {
                 id: db_entry.id,
                 relative_path: rel.clone(),
