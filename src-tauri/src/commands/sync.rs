@@ -75,30 +75,14 @@ pub fn sync_workspace(
     // Step 4: classify (pure function).
     let plan: ReconcilePlan = reconcile::reconcile(id, fs, db_index);
 
-    // Step 5: emit progress before writes (so UI sees the counts).
-    let total = plan.kept.len() as i64
-        + plan.modified.len() as i64
-        + plan.added.len() as i64
-        + plan.rebound.len() as i64;
-    let _ = app.emit(
-        "scan-progress",
-        ScanProgress {
-            total,
-            processed: total,
-            new_files: plan.added.len() as i64,
-            modified_files: plan.modified.len() as i64,
-            finished: true,
-        },
-    );
-
-    // Step 6: apply kept / modified / added / rebound in one transaction.
+    // Step 5: apply kept / modified / added / rebound in one transaction.
     // (Excludes `deleted`, which the user must confirm via MissingFilesDialog.)
     {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
         reconcile::apply_plan(&conn, id, &plan).map_err(|e| e.to_string())?;
     }
 
-    // Step 7: build deleted_candidates from the plan's deleted entries,
+    // Step 6: build deleted_candidates from the plan's deleted entries,
     // joining back to fetch rating / last_viewed_at / tag_names for the UI.
     let deleted_candidates = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
@@ -150,6 +134,25 @@ pub fn sync_workspace(
         }
         out
     };
+
+    // Step 7: emit finished=true LAST so the UI's existing listener
+    // (BrowserView.unlistenScan -> fetchImages + fetchTags + background
+    // thumbnail regen) only fires after all writes have committed and the
+    // deleted_candidates list is ready to be consumed.
+    let total = plan.kept.len() as i64
+        + plan.modified.len() as i64
+        + plan.added.len() as i64
+        + plan.rebound.len() as i64;
+    let _ = app.emit(
+        "scan-progress",
+        ScanProgress {
+            total,
+            processed: total,
+            new_files: plan.added.len() as i64,
+            modified_files: plan.modified.len() as i64,
+            finished: true,
+        },
+    );
 
     Ok(SyncResult {
         totals: SyncTotals {
