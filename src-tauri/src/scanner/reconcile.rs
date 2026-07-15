@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use rusqlite::{params, Connection, Result};
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FsEntry {
     pub relative_path: String,
@@ -26,7 +28,6 @@ pub struct ReconcilePlan {
     pub rebound: Vec<(i64, String, FsEntry)>,
     pub deleted: Vec<(String, DbEntry)>,
 }
-
 
 pub fn reconcile(
     workspace_id: i64,
@@ -73,7 +74,7 @@ pub fn reconcile(
     }).collect();
 
     // Step 2b: count how many fs entries claim each db entry.
-    let mut db_claim_count: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    let mut db_claim_count: HashMap<usize, usize> = HashMap::new();
     for opt in &fs_candidates {
         if let Some(j) = opt {
             *db_claim_count.entry(*j).or_insert(0) += 1;
@@ -81,7 +82,7 @@ pub fn reconcile(
     }
 
     // Step 2c: commit rebinds where both sides have exactly one partner.
-    let mut rebound_fs_idx: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    let mut rebound_fs_idx: HashSet<usize> = HashSet::new();
     for (i, opt) in fs_candidates.iter().enumerate() {
         if let Some(j) = opt {
             if db_claim_count[j] == 1 {
@@ -99,14 +100,93 @@ pub fn reconcile(
             plan.added.push(entry);
         }
     }
+
     plan.deleted = unmatched_db;
     plan
 }
+
+pub fn apply_plan(
+    conn: &Connection,
+    workspace_id: i64,
+    plan: &ReconcilePlan,
+) -> Result<()> {
+    conn.execute_batch("BEGIN")?;
+    let result: Result<()> = (|| {
+        // modified: refresh size/mtime/thumbnail; preserve rating/notes/tags.
+        {
+            let mut stmt = conn.prepare(
+                "UPDATE images
+                    SET file_size = ?1, created_at = ?2, updated_at = datetime('now'),
+                        thumbnail_path = NULL
+                  WHERE id = ?3"
+            )?;
+            for (id, fs_entry) in &plan.modified {
+                stmt.execute(params![fs_entry.size, fs_entry.mtime, id])?;
+            }
+        }
+        // rebound: rename in place; preserve everything else.
+        {
+            let mut stmt = conn.prepare(
+                "UPDATE images
+                    SET relative_path = ?1, file_name = ?2, updated_at = datetime('now')
+                  WHERE id = ?3"
+            )?;
+            for (id, new_rel, fs_entry) in &plan.rebound {
+                stmt.execute(params![new_rel, fs_entry.file_name, id])?;
+            }
+        }
+        // added: insert fresh row; rating and notes are omitted from the column
+        // list so SQLite applies the schema defaults (0 and ''). Explicitly
+        // passing NULL would override the defaults.
+        {
+            let mut stmt = conn.prepare(
+                "INSERT INTO images (
+                    workspace_id, relative_path, file_name, file_size,
+                    file_hash, width, height, format,
+                    thumbnail_path,
+                    created_at, file_created_at,
+                    updated_at, indexed_at, last_viewed_at
+                ) VALUES (
+                    ?1, ?2, ?3, ?4,
+                    NULL, NULL, NULL, ?5,
+                    NULL,
+                    ?6, ?7,
+                    datetime('now'), datetime('now'), NULL
+                )"
+            )?;
+            for fs_entry in &plan.added {
+                stmt.execute(params![
+                    workspace_id,
+                    fs_entry.relative_path,
+                    fs_entry.file_name,
+                    fs_entry.size,
+                    fs_entry.format,
+                    fs_entry.mtime,
+                    fs_entry.file_created_at,
+                ])?;
+            }
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")?;
+            Ok(())
+        }
+        Err(e) => {
+            conn.execute_batch("ROLLBACK").ok();
+            Err(e)
+        }
+    }
+}
+
+use std::collections::HashSet;
+
 #[cfg(test)]
-mod tests {
+mod helpers {
     use super::*;
 
-    fn fs(rel: &str, size: i64, mtime: &str) -> FsEntry {
+    pub fn fs(rel: &str, size: i64, mtime: &str) -> FsEntry {
         FsEntry {
             relative_path: rel.into(),
             file_name: rel.rsplit('/').next().unwrap_or(rel).into(),
@@ -117,9 +197,15 @@ mod tests {
         }
     }
 
-    fn entry(id: i64, size: i64, mtime: &str) -> DbEntry {
+    pub fn entry(id: i64, size: i64, mtime: &str) -> DbEntry {
         DbEntry { id, size, mtime: mtime.into(), thumbnail_path: None }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::helpers::{fs, entry};
 
     #[test]
     fn empty_inputs_yield_empty_plan() {
@@ -239,10 +325,10 @@ mod tests {
         index.insert("modified.jpg".to_string(), entry(8, 100, "2026-01-01T00:00:00"));
         index.insert("old_name.jpg".to_string(), entry(9, 200, "2026-02-01T00:00:00"));
         let fs = vec![
-            fs("kept.jpg",          100, "2026-01-01T00:00:00"), // kept
-            fs("modified.jpg",      150, "2026-01-02T00:00:00"), // modified
-            fs("renamed.jpg",       200, "2026-02-01T00:00:00"), // rebound
-            fs("brand_new.jpg",     300, "2026-03-01T00:00:00"), // added
+            fs("kept.jpg",          100, "2026-01-01T00:00:00"),
+            fs("modified.jpg",      150, "2026-01-02T00:00:00"),
+            fs("renamed.jpg",       200, "2026-02-01T00:00:00"),
+            fs("brand_new.jpg",     300, "2026-03-01T00:00:00"),
         ];
         let plan = reconcile(1, fs, index);
         assert_eq!(plan.kept,    vec![7]);
@@ -257,9 +343,6 @@ mod tests {
 
     #[test]
     fn workspace_id_is_passthrough_only() {
-        // workspace_id has no effect on classification; it exists in the signature
-        // for forward use (e.g., tagging apply_plan batches). Same inputs at
-        // different ids must produce identical plans.
         let mut index = HashMap::new();
         index.insert("a/1.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
         let fs = vec![fs("a/1.jpg", 100, "2026-01-01T00:00:00")];
@@ -271,5 +354,188 @@ mod tests {
         assert_eq!(p1.modified, p2.modified);
         assert_eq!(p1.rebound, p2.rebound);
         assert_eq!(p1.deleted, p2.deleted);
+    }
+}
+
+#[cfg(test)]
+mod apply_plan_tests {
+    use super::*;
+    use super::helpers::{fs, entry};
+    use rusqlite::Connection;
+    use tempfile::tempdir;
+
+    fn fresh_db() -> Connection {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        std::mem::forget(dir);
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                path TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                relative_path TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                file_size INTEGER,
+                file_hash TEXT,
+                width INTEGER,
+                height INTEGER,
+                format TEXT,
+                thumbnail_path TEXT,
+                notes TEXT DEFAULT '',
+                rating INTEGER DEFAULT 0 CHECK(rating >= 0 AND rating <= 5),
+                created_at TEXT,
+                file_created_at TEXT,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                indexed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_viewed_at TEXT,
+                UNIQUE(workspace_id, relative_path)
+            );
+            INSERT INTO workspaces (name, path) VALUES ('test', '/tmp/test');"
+        ).unwrap();
+        conn
+    }
+
+    #[test]
+    fn kept_row_is_unchanged_in_db() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO images (workspace_id, relative_path, file_name, file_size, rating, notes, created_at)
+             VALUES (1, 'a.jpg', 'a.jpg', 100, 4, 'my note', '2026-01-01T00:00:00')",
+            [],
+        ).unwrap();
+        let id: i64 = conn.query_row(
+            "SELECT id FROM images WHERE relative_path = 'a.jpg'", [], |r| r.get(0)
+        ).unwrap();
+
+        let mut index = HashMap::new();
+        index.insert("a.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
+        let plan = ReconcilePlan { kept: vec![id], ..Default::default() };
+        apply_plan(&conn, 1, &plan).unwrap();
+
+        let row = conn.query_row(
+            "SELECT rating, notes FROM images WHERE id = ?1",
+            [id], |r| Ok((r.get::<_, i32>(0)?, r.get::<_, String>(1)?))
+        ).unwrap();
+        assert_eq!(row.0, 4);
+        assert_eq!(row.1, "my note");
+    }
+
+    #[test]
+    fn modified_row_updates_size_mtime_and_clears_thumbnail_path() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO images (workspace_id, relative_path, file_name, file_size, rating, notes, created_at, thumbnail_path)
+             VALUES (1, 'a.jpg', 'a.jpg', 100, 5, 'kept', '2026-01-01T00:00:00', '/thumbs/a.jpg')",
+            [],
+        ).unwrap();
+        let id: i64 = conn.query_row(
+            "SELECT id FROM images WHERE relative_path = 'a.jpg'", [], |r| r.get(0)
+        ).unwrap();
+
+        let mut index = HashMap::new();
+        index.insert("a.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
+        let plan = ReconcilePlan {
+            modified: vec![(id, fs("a.jpg", 200, "2026-02-01T00:00:00"))],
+            ..Default::default()
+        };
+        apply_plan(&conn, 1, &plan).unwrap();
+
+        let row = conn.query_row(
+            "SELECT file_size, created_at, thumbnail_path, rating, notes FROM images WHERE id = ?1",
+            [id], |r| Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, i32>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        ).unwrap();
+        assert_eq!(row.0, 200);
+        assert_eq!(row.1, "2026-02-01T00:00:00");
+        assert_eq!(row.2, None, "thumbnail_path must be cleared so the batch regen picks it up");
+        assert_eq!(row.3, 5, "rating preserved");
+        assert_eq!(row.4, "kept", "notes preserved");
+    }
+
+    #[test]
+    fn added_row_has_default_rating_notes_thumbnail() {
+        let conn = fresh_db();
+        let plan = ReconcilePlan {
+            added: vec![fs("brand.jpg", 555, "2026-03-01T00:00:00")],
+            ..Default::default()
+        };
+        apply_plan(&conn, 1, &plan).unwrap();
+
+        let row = conn.query_row(
+            "SELECT rating, notes, thumbnail_path, file_hash, width, height FROM images WHERE relative_path = 'brand.jpg'",
+            [], |r| Ok((
+                r.get::<_, Option<i32>>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<i32>>(4)?,
+                r.get::<_, Option<i32>>(5)?,
+            ))
+        ).unwrap();
+        assert_eq!(row.0, Some(0));
+        assert_eq!(row.1, Some("".into()));
+        assert_eq!(row.2, None);
+        assert_eq!(row.3, None);
+        assert_eq!(row.4, None);
+        assert_eq!(row.5, None);
+    }
+
+    #[test]
+    fn rebound_row_preserves_metadata_and_thumbnail() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO images (workspace_id, relative_path, file_name, file_size, rating, notes, created_at, thumbnail_path)
+             VALUES (1, 'old.jpg', 'old.jpg', 100, 3, 'precious', '2026-01-01T00:00:00', '/thumbs/old.jpg')",
+            [],
+        ).unwrap();
+        let id: i64 = conn.query_row(
+            "SELECT id FROM images WHERE relative_path = 'old.jpg'", [], |r| r.get(0)
+        ).unwrap();
+
+        let mut index = HashMap::new();
+        index.insert("old.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
+        let plan = ReconcilePlan {
+            rebound: vec![(id, "new.jpg".into(), fs("new.jpg", 100, "2026-01-01T00:00:00"))],
+            ..Default::default()
+        };
+        apply_plan(&conn, 1, &plan).unwrap();
+
+        let row = conn.query_row(
+            "SELECT relative_path, file_name, rating, notes, thumbnail_path FROM images WHERE id = ?1",
+            [id], |r| Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i32>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, Option<String>>(4)?,
+            ))
+        ).unwrap();
+        assert_eq!(row.0, "new.jpg");
+        assert_eq!(row.1, "new.jpg");
+        assert_eq!(row.2, 3, "rating preserved across rename");
+        assert_eq!(row.3, "precious", "notes preserved across rename");
+        assert_eq!(row.4, Some("/thumbs/old.jpg".into()), "thumbnail_path preserved (keyed by id, not path)");
+    }
+
+    #[test]
+    fn apply_plan_runs_inside_one_transaction() {
+        let conn = fresh_db();
+        let plan = ReconcilePlan {
+            added: vec![fs("a.jpg", 1, "2026-01-01T00:00:00")],
+            ..Default::default()
+        };
+        apply_plan(&conn, 1, &plan).unwrap();
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM images", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
     }
 }
