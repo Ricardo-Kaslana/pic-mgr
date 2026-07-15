@@ -20,7 +20,7 @@ async function handleCreate(name: string, path: string) {
   const ws = await store.create(name, path)
   showDialog.value = false
   router.push(`/workspace/${ws.id}`)
-  store.scan(ws.id)
+  store.sync(ws.id)
 }
 
 function handleSelect(id: number) {
@@ -40,7 +40,7 @@ async function handleDelete(id: number) {
 async function handleRescan(id: number) {
   scanningIds.add(id)
   try {
-    await store.scan(id)
+    await store.sync(id)
     justScannedIds.add(id)
     setTimeout(() => justScannedIds.delete(id), 2000)
   } finally {

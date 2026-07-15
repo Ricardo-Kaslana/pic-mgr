@@ -30,7 +30,7 @@ export interface ImageRecord {
 /// The grid only renders: thumbnail, file name, rating, selection state.
 /// The context menu needs relative_path for "open in explorer" / "copy
 /// path" / move / trash actions, so we include it (the rest of the heavy
-/// fields — file_hash, notes, last_viewed_at, file_created_at — are still
+/// fields -- file_hash, notes, last_viewed_at, file_created_at -- are still
 /// excluded). A typical row is ~3x smaller than the full ImageRecord.
 export interface ImageSummary {
   id: number
@@ -92,6 +92,29 @@ export interface ScanProgress {
   new_files: number
   modified_files: number
   finished: boolean
+}
+
+export interface SyncTotals {
+  kept: number
+  modified: number
+  added: number
+  rebound: number
+  deletedCandidates: number
+  durationMs: number
+}
+
+export interface DeletedCandidate {
+  id: number
+  relativePath: string
+  fileName: string
+  rating: number | null
+  lastViewedAt: string | null
+  tagNames: string[]
+}
+
+export interface SyncResult {
+  totals: SyncTotals
+  deletedCandidates: DeletedCandidate[]
 }
 
 export interface ThumbnailProgress {
