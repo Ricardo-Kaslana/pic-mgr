@@ -165,4 +165,25 @@ export default {
     title: 'Select target workspace',
     noWorkspaces: 'No other workspaces available',
   },
+
+  missing: {
+    title: 'Missing files ({count})',
+    description: 'These files are no longer on disk. Deleting them also removes their tags and ratings.',
+    keepAll: 'Keep all',
+    deleteSelected: 'Delete selected ({count})',
+    cancel: 'Cancel',
+    empty: 'No files selected',
+    deletedToast: 'Deleted {count} row(s)',
+    deleteFailed: 'Delete failed: {error}',
+  },
+  sync: {
+    counts: {
+      added: '{n} added',
+      modified: '{n} modified',
+      kept: '{n} kept',
+      rebound: '{n} rebound',
+      deletedCandidates: '{n} missing',
+    },
+    resultToast: 'Sync complete: {added} added, {modified} modified, {rebound} rebound, {deletedCandidates} to confirm',
+  },
 }

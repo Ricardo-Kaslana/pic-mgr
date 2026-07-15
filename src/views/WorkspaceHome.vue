@@ -5,14 +5,19 @@ import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore } from '../stores/workspace'
 import WorkspaceCard from '../components/workspace/WorkspaceCard.vue'
 import CreateWorkspaceDialog from '../components/workspace/CreateWorkspaceDialog.vue'
+import MissingFilesDialog from '../components/workspace/MissingFilesDialog.vue'
+import { useToast } from '../composables/useToast'
+import type { DeletedCandidate } from '../types'
 
 const { t } = useI18n()
 const router = useRouter()
 const store = useWorkspaceStore()
+const { showToast } = useToast()
 const showDialog = ref(false)
 const deleteError = ref('')
 const scanningIds = reactive(new Set<number>())
 const justScannedIds = reactive(new Set<number>())
+const pendingMissing = ref<DeletedCandidate[] | null>(null)
 
 onMounted(() => store.fetchAll())
 
@@ -38,13 +43,48 @@ async function handleDelete(id: number) {
 }
 
 async function handleRescan(id: number) {
+  // Guard against double-clicks: syncingIds is owned by the store.
+  if (store.isSyncing(id)) return
+  if (!confirm(t('workspace.syncConfirm'))) return
   scanningIds.add(id)
   try {
-    await store.sync(id)
+    const result = await store.sync(id)
+    justScannedIds.add(id)
+    setTimeout(() => justScannedIds.delete(id), 2000)
+    showToast(t('sync.resultToast', {
+      added: result.totals.added,
+      modified: result.totals.modified,
+      rebound: result.totals.rebound,
+      deletedCandidates: result.totals.deletedCandidates,
+    }))
+    if (result.deletedCandidates.length > 0) {
+      pendingMissing.value = result.deletedCandidates
+    }
+  } finally {
+    scanningIds.delete(id)
+  }
+}
+
+async function handleFullReset(id: number) {
+  if (!confirm(t('workspace.fullResetFinal'))) return
+  scanningIds.add(id)
+  try {
+    await store.rescan(id)
     justScannedIds.add(id)
     setTimeout(() => justScannedIds.delete(id), 2000)
   } finally {
     scanningIds.delete(id)
+  }
+}
+
+async function handleMissingApply(ids: number[]) {
+  try {
+    const deleted = await store.applyDeletions(ids)
+    showToast(t('missing.deletedToast', { count: deleted }))
+  } catch (e: any) {
+    showToast(t('missing.deleteFailed', { error: e?.toString?.() ?? e ?? '' }))
+  } finally {
+    pendingMissing.value = null
   }
 }
 </script>
@@ -73,10 +113,12 @@ async function handleRescan(id: number) {
         :key="ws.id"
         :workspace="ws"
         :scanning="scanningIds.has(ws.id)"
+        :syncing="store.isSyncing(ws.id)"
         :just-scanned="justScannedIds.has(ws.id)"
         @select="handleSelect"
         @delete="handleDelete"
         @rescan="handleRescan"
+        @full-reset="handleFullReset"
       />
     </div>
 
@@ -84,6 +126,13 @@ async function handleRescan(id: number) {
       v-if="showDialog"
       @create="handleCreate"
       @close="showDialog = false"
+    />
+
+    <MissingFilesDialog
+      v-if="pendingMissing"
+      :candidates="pendingMissing"
+      @apply="handleMissingApply"
+      @close="pendingMissing = null"
     />
   </div>
 </template>

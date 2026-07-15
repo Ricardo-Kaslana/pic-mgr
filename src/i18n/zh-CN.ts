@@ -163,4 +163,25 @@ export default {
     title: '选择目标工作区',
     noWorkspaces: '没有其他可用工作区',
   },
+
+  missing: {
+    title: '磁盘已消失的文件 ({count})',
+    description: '以下文件已不在磁盘上。删除后将连带清除标签和评分。',
+    keepAll: '全部保留',
+    deleteSelected: '删除选中 ({count})',
+    cancel: '取消',
+    empty: '未选中任何文件',
+    deletedToast: '已删除 {count} 行',
+    deleteFailed: '删除失败：{error}',
+  },
+  sync: {
+    counts: {
+      added: '新增 {n}',
+      modified: '已修改 {n}',
+      kept: '未变更 {n}',
+      rebound: '已重绑 {n}',
+      deletedCandidates: '磁盘消失 {n}',
+    },
+    resultToast: '同步完成：{added} 新增，{modified} 修改，{rebound} 重绑，{deletedCandidates} 待确认',
+  },
 }
