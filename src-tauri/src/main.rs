@@ -38,6 +38,8 @@ fn main() {
             commands::workspace::delete_workspace,
             commands::scan::scan_workspace,
             commands::scan::rescan_workspace,
+            commands::sync::sync_workspace,
+            commands::sync::apply_sync_deletions,
             commands::images::get_images,
             commands::images::get_images_light,
             commands::images::get_image_detail,
