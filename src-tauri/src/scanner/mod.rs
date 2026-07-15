@@ -1,4 +1,5 @@
 pub mod thumbnail;
+pub mod reconcile;
 
 use std::fs;
 use std::path::Path;
