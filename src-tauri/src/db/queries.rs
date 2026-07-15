@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use crate::scanner::reconcile::DbEntry;
 use rusqlite::{params, params_from_iter, Connection, Result, Row};
 use crate::models::*;
 
@@ -692,7 +694,34 @@ pub fn get_image_paths(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, i64, 
     rows.collect()
 }
 
-// ── Helpers ──
+
+/// Load the lightweight index used by sync_workspace's reconcile step.
+/// Returns relative_path -> DbEntry for every row in `images` for the given
+/// workspace. Holds the DB lock for the duration of the SELECT; the caller
+/// must drop the connection guard before invoking apply_plan.
+pub fn load_index(conn: &Connection, workspace_id: i64) -> Result<HashMap<String, DbEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, relative_path, file_size, created_at, thumbnail_path
+         FROM images WHERE workspace_id = ?1"
+    )?;
+    let rows = stmt.query_map(params![workspace_id], |row| {
+        Ok((
+            row.get::<_, String>(1)?,           // relative_path (becomes map key)
+            DbEntry {
+                id: row.get(0)?,
+                size: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                mtime: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                thumbnail_path: row.get(4)?,
+            },
+        ))
+    })?;
+    let mut out: HashMap<String, DbEntry> = HashMap::new();
+    for row in rows {
+        let (rel, entry) = row?;
+        out.insert(rel, entry);
+    }
+    Ok(out)
+}// ── Helpers ──
 
 fn chrono_now(conn: &Connection) -> String {
     conn.query_row("SELECT datetime('now')", [], |row| row.get(0))
