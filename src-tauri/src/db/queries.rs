@@ -666,10 +666,17 @@ pub fn get_tags_for_image(conn: &Connection, image_id: i64) -> Result<Vec<Tag>> 
 
 // ── Thumbnails ──
 
-pub fn update_thumbnail_path(conn: &Connection, image_id: i64, path: &str) -> Result<()> {
+pub fn update_thumbnail_path(
+    conn: &Connection,
+    image_id: i64,
+    path: &str,
+    width: u32,
+    height: u32,
+) -> Result<()> {
     conn.execute(
-        "UPDATE images SET thumbnail_path = ?1, updated_at = datetime('now') WHERE id = ?2",
-        params![path, image_id],
+        "UPDATE images SET thumbnail_path = ?1, width = ?2, height = ?3,
+                updated_at = datetime('now') WHERE id = ?4",
+        params![path, width, height, image_id],
     )?;
     Ok(())
 }

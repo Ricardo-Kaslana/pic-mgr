@@ -6,7 +6,7 @@ This file provides guidance to the AI agent when working with code in this repos
 
 - **Never modify original image files.** All metadata (tags, ratings, notes) goes into SQLite only.
 - DedupView is embedded inside BrowserView as a child component, not a separate route (Vue Router nesting causes black screen).
-- Image dimensions are null at scan time; they get filled only after thumbnail generation.
+- Image dimensions are null at scan time. `ThumbnailCache::generate()` returns `(path, w, h)` and `update_thumbnail_path` persists all three; for rows still NULL (e.g. thumbnail file already existed so generation was skipped), `get_image_detail` lazily backfills via a header-only `into_dimensions()` read (wrapped in `catch_unwind`, no `updated_at` bump).
 - DB migrations run at startup via `ALTER TABLE ADD COLUMN` with `.ok()` to ignore "already exists" errors — no migration framework.
 - **FTS5 triggers use rowid-only delete**: `INSERT INTO images_fts(images_fts, rowid) VALUES('delete', old.id)` — do NOT include content columns on delete, as content verification mismatches silently break cascade operations.
 - **Grid uses `ImageSummary`, detail uses `ImageRecord`**: the grid (`images` store, `ThumbnailGrid`, `LightboxViewer`) only ever reads `id`, `workspace_id`, `relative_path`, `file_name`, `rating`, and the thumbnail fields. The right-side `ImageInfo` (in `DetailPanel`) reads the full `ImageRecord` from `imageStore.selectedDetail`. Do NOT widen `ImageSummary` to add fields the grid does not render — every added column is paid for on every workspace open.

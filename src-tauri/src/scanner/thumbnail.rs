@@ -21,7 +21,9 @@ impl ThumbnailCache {
         self.cache_dir.join(format!("{}.jpg", image_id))
     }
 
-    pub fn generate(&self, source_path: &Path, image_id: i64) -> Result<String, String> {
+    /// Returns (cache_path, original_width, original_height) so callers can
+    /// backfill the width/height columns, which are NULL at scan time.
+    pub fn generate(&self, source_path: &Path, image_id: i64) -> Result<(String, u32, u32), String> {
         // Read file once into buffer (was 3 separate reads: metadata + magic + decode)
         let buf = std::fs::read(source_path)
             .map_err(|e| format!("Cannot read file: {}", e))?;
@@ -79,7 +81,7 @@ impl ThumbnailCache {
         std::fs::write(&cache_path, &output)
             .map_err(|e| format!("Cannot write thumbnail: {}", e))?;
 
-        Ok(cache_path.to_string_lossy().to_string())
+        Ok((cache_path.to_string_lossy().to_string(), w, h))
     }
 
     pub fn get_bytes(&self, image_id: i64) -> Option<Vec<u8>> {
