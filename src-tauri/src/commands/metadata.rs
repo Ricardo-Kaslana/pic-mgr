@@ -50,7 +50,7 @@ fn delete_db_records(conn: &rusqlite::Connection, ids: &[i64]) -> Result<(), Str
 }
 
 /// Helper: delete thumbnail cache files for a list of image IDs
-fn delete_thumbnail_files(cache: &crate::scanner::thumbnail::ThumbnailCache, ids: &[i64]) {
+pub(crate) fn delete_thumbnail_files(cache: &crate::scanner::thumbnail::ThumbnailCache, ids: &[i64]) {
     for &id in ids {
         let path = cache.cache_path(id);
         if path.exists() {

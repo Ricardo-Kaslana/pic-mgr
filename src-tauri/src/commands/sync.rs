@@ -170,29 +170,35 @@ pub fn sync_workspace(
 #[tauri::command]
 pub fn apply_sync_deletions(
     state: State<AppState>,
+    thumb_state: State<super::thumbnail::ThumbnailState>,
     ids: Vec<i64>,
 ) -> Result<usize, String> {
     if ids.is_empty() {
         return Ok(0);
     }
-    let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("?{}", i + 1)).collect();
-    let sql = format!(
-        "DELETE FROM images WHERE id IN ({})",
-        placeholders.join(",")
-    );
-    let params_vec: Vec<&dyn rusqlite::ToSql> =
-        ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
-    let result = conn.execute(&sql, params_vec.as_slice());
-    match result {
-        Ok(n) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-            Ok(n)
+    let n = {
+        let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("?{}", i + 1)).collect();
+        let sql = format!(
+            "DELETE FROM images WHERE id IN ({})",
+            placeholders.join(",")
+        );
+        let params_vec: Vec<&dyn rusqlite::ToSql> =
+            ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
+        match conn.execute(&sql, params_vec.as_slice()) {
+            Ok(n) => {
+                conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+                n
+            }
+            Err(e) => {
+                conn.execute_batch("ROLLBACK").ok();
+                return Err(e.to_string());
+            }
         }
-        Err(e) => {
-            conn.execute_batch("ROLLBACK").ok();
-            Err(e.to_string())
-        }
+    };
+    if let Ok(cache) = thumb_state.cache.lock() {
+        super::metadata::delete_thumbnail_files(&cache, &ids);
     }
+    Ok(n)
 }

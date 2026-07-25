@@ -57,11 +57,39 @@ pub fn scan_workspace(state: State<AppState>, app: AppHandle, id: i64) -> Result
 }
 
 #[tauri::command]
-pub fn rescan_workspace(state: State<AppState>, app: AppHandle, id: i64) -> Result<ScanProgress, String> {
-    {
+pub fn rescan_workspace(
+    state: State<AppState>,
+    thumb_state: State<crate::commands::thumbnail::ThumbnailState>,
+    app: AppHandle,
+    id: i64,
+) -> Result<ScanProgress, String> {
+    // Verify the path is reachable BEFORE wiping rows -- otherwise a
+    // disconnected drive turns "full reset" into total data loss.
+    let old_ids: Vec<i64> = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+        let workspace = crate::db::queries::get_workspace(&conn, id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Workspace not found".to_string())?;
+        let ws_path = std::path::PathBuf::from(&workspace.path);
+        if !ws_path.exists() {
+            return Err(format!("Path does not exist: {}", ws_path.display()));
+        }
+        let mut stmt = conn
+            .prepare("SELECT id FROM images WHERE workspace_id = ?1")
+            .map_err(|e| e.to_string())?;
+        let ids: Vec<i64> = stmt
+            .query_map(rusqlite::params![id], |row| row.get(0))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
         conn.execute("DELETE FROM images WHERE workspace_id = ?1", rusqlite::params![id])
             .map_err(|e| e.to_string())?;
+        ids
+    };
+    // Rescan inserts rows with fresh AUTOINCREMENT ids, so the old {id}.jpg
+    // cache files would never be reclaimed without this sweep.
+    if let Ok(cache) = thumb_state.cache.lock() {
+        crate::commands::metadata::delete_thumbnail_files(&cache, &old_ids);
     }
     scan_workspace(state, app, id)
 }
