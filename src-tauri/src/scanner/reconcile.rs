@@ -58,7 +58,7 @@ pub fn reconcile(
     // fs entry matches two db entries), the situation is ambiguous -- we cannot
     // tell which fs is the renamed version, so both fs go to `added` and the
     // db row stays in `deleted`. The user reviews the deleted list and decides.
-    let mut unmatched_db: Vec<(String, DbEntry)> = db.into_iter().collect();
+    let unmatched_db: Vec<(String, DbEntry)> = db.into_iter().collect();
 
     // Step 2a: for each leftover fs, find db candidates (matching size+mtime).
     let fs_candidates: Vec<Option<usize>> = leftover_fs.iter().map(|entry| {
@@ -82,14 +82,19 @@ pub fn reconcile(
     }
 
     // Step 2c: commit rebinds where both sides have exactly one partner.
+    // Mark matched db indices instead of removing mid-loop: `fs_candidates`
+    // holds indices into the original `unmatched_db`, so a remove() would
+    // shift later indices and rebind the wrong row (or panic).
     let mut rebound_fs_idx: HashSet<usize> = HashSet::new();
+    let mut rebound_db_idx: HashSet<usize> = HashSet::new();
     for (i, opt) in fs_candidates.iter().enumerate() {
         if let Some(j) = opt {
             if db_claim_count[j] == 1 {
                 let entry = leftover_fs[i].clone();
-                let (_old_rel, db_entry) = unmatched_db.remove(*j);
+                let (_old_rel, db_entry) = &unmatched_db[*j];
                 plan.rebound.push((db_entry.id, entry.relative_path.clone(), entry));
                 rebound_fs_idx.insert(i);
+                rebound_db_idx.insert(*j);
             }
         }
     }
@@ -101,7 +106,12 @@ pub fn reconcile(
         }
     }
 
-    plan.deleted = unmatched_db;
+    plan.deleted = unmatched_db
+        .into_iter()
+        .enumerate()
+        .filter(|(j, _)| !rebound_db_idx.contains(j))
+        .map(|(_, e)| e)
+        .collect();
     plan
 }
 
@@ -112,12 +122,14 @@ pub fn apply_plan(
 ) -> Result<()> {
     conn.execute_batch("BEGIN")?;
     let result: Result<()> = (|| {
-        // modified: refresh size/mtime/thumbnail; preserve rating/notes/tags.
+        // modified: refresh size/mtime; clear derived data (thumbnail, hash,
+        // dimensions) since the file content changed; preserve rating/notes/tags.
         {
             let mut stmt = conn.prepare(
                 "UPDATE images
                     SET file_size = ?1, created_at = ?2, updated_at = datetime('now'),
-                        thumbnail_path = NULL
+                        thumbnail_path = NULL, file_hash = NULL,
+                        width = NULL, height = NULL
                   WHERE id = ?3"
             )?;
             for (id, fs_entry) in &plan.modified {
@@ -342,6 +354,31 @@ mod tests {
     }
 
     #[test]
+    fn two_simultaneous_renames_both_rebind_correctly() {
+        // HashMap iteration order is randomized per process, so repeat to
+        // exercise both orderings of unmatched_db.
+        for _ in 0..100 {
+            let mut index = HashMap::new();
+            index.insert("old_a.jpg".to_string(), entry(1, 100, "2026-01-01T00:00:00"));
+            index.insert("old_b.jpg".to_string(), entry(2, 200, "2026-01-02T00:00:00"));
+            let fs_list = vec![
+                fs("new_a.jpg", 100, "2026-01-01T00:00:00"),
+                fs("new_b.jpg", 200, "2026-01-02T00:00:00"),
+            ];
+            let plan = reconcile(1, fs_list, index);
+            assert_eq!(plan.rebound.len(), 2);
+            assert!(plan.deleted.is_empty());
+            let mut pairs: Vec<(i64, String)> = plan.rebound.iter()
+                .map(|(id, rel, _)| (*id, rel.clone())).collect();
+            pairs.sort();
+            assert_eq!(pairs, vec![
+                (1, "new_a.jpg".to_string()),
+                (2, "new_b.jpg".to_string()),
+            ]);
+        }
+    }
+
+    #[test]
     fn workspace_id_is_passthrough_only() {
         let mut index = HashMap::new();
         index.insert("a/1.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
@@ -429,8 +466,8 @@ mod apply_plan_tests {
     fn modified_row_updates_size_mtime_and_clears_thumbnail_path() {
         let conn = fresh_db();
         conn.execute(
-            "INSERT INTO images (workspace_id, relative_path, file_name, file_size, rating, notes, created_at, thumbnail_path)
-             VALUES (1, 'a.jpg', 'a.jpg', 100, 5, 'kept', '2026-01-01T00:00:00', '/thumbs/a.jpg')",
+            "INSERT INTO images (workspace_id, relative_path, file_name, file_size, rating, notes, created_at, thumbnail_path, file_hash, width, height)
+             VALUES (1, 'a.jpg', 'a.jpg', 100, 5, 'kept', '2026-01-01T00:00:00', '/thumbs/a.jpg', 'deadbeef', 800, 600)",
             [],
         ).unwrap();
         let id: i64 = conn.query_row(
@@ -446,13 +483,16 @@ mod apply_plan_tests {
         apply_plan(&conn, 1, &plan).unwrap();
 
         let row = conn.query_row(
-            "SELECT file_size, created_at, thumbnail_path, rating, notes FROM images WHERE id = ?1",
+            "SELECT file_size, created_at, thumbnail_path, rating, notes, file_hash, width, height FROM images WHERE id = ?1",
             [id], |r| Ok((
                 r.get::<_, i64>(0)?,
                 r.get::<_, String>(1)?,
                 r.get::<_, Option<String>>(2)?,
                 r.get::<_, i32>(3)?,
                 r.get::<_, String>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, Option<i32>>(6)?,
+                r.get::<_, Option<i32>>(7)?,
             ))
         ).unwrap();
         assert_eq!(row.0, 200);
@@ -460,6 +500,9 @@ mod apply_plan_tests {
         assert_eq!(row.2, None, "thumbnail_path must be cleared so the batch regen picks it up");
         assert_eq!(row.3, 5, "rating preserved");
         assert_eq!(row.4, "kept", "notes preserved");
+        assert_eq!(row.5, None, "stale hash cleared (content changed)");
+        assert_eq!(row.6, None, "stale width cleared");
+        assert_eq!(row.7, None, "stale height cleared");
     }
 
     #[test]
