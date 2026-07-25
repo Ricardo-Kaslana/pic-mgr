@@ -185,5 +185,6 @@ export default {
       deletedCandidates: '{n} missing',
     },
     resultToast: 'Sync complete: {added} added, {modified} modified, {rebound} rebound, {deletedCandidates} to confirm',
+    failed: 'Sync failed: {error}',
   },
 }

@@ -183,5 +183,6 @@ export default {
       deletedCandidates: '磁盘消失 {n}',
     },
     resultToast: '同步完成：{added} 新增，{modified} 修改，{rebound} 重绑，{deletedCandidates} 待确认',
+    failed: '同步失败：{error}',
   },
 }

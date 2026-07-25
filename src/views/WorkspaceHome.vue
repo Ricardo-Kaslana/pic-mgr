@@ -25,7 +25,9 @@ async function handleCreate(name: string, path: string) {
   const ws = await store.create(name, path)
   showDialog.value = false
   router.push(`/workspace/${ws.id}`)
-  store.sync(ws.id)
+  store.sync(ws.id).catch((e: any) => {
+    showToast(t('sync.failed', { error: e?.toString?.() ?? e ?? '' }))
+  })
 }
 
 function handleSelect(id: number) {
@@ -60,6 +62,8 @@ async function handleRescan(id: number) {
     if (result.deletedCandidates.length > 0) {
       pendingMissing.value = result.deletedCandidates
     }
+  } catch (e: any) {
+    showToast(t('sync.failed', { error: e?.toString?.() ?? e ?? '' }))
   } finally {
     scanningIds.delete(id)
   }
@@ -72,6 +76,8 @@ async function handleFullReset(id: number) {
     await store.rescan(id)
     justScannedIds.add(id)
     setTimeout(() => justScannedIds.delete(id), 2000)
+  } catch (e: any) {
+    showToast(t('sync.failed', { error: e?.toString?.() ?? e ?? '' }))
   } finally {
     scanningIds.delete(id)
   }
