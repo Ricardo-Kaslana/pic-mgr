@@ -50,10 +50,14 @@ Tag IDs are globally unique (`INTEGER PRIMARY KEY AUTOINCREMENT`), which is what
 ```bash
 npm run tauri dev            # full dev server (frontend + Rust backend)
 npm run tauri build          # production build
+npm run typecheck            # frontend type check (vue-tsc)
 cd src-tauri && cargo check  # Rust-only compile check (fast feedback)
+cd src-tauri && cargo test   # Rust unit tests
+cd src-tauri && cargo fmt --check
 ```
 
-No test suite exists. There is no linter configured beyond vue-tsc.
+CI runs type checking, formatting and the Rust unit tests. Keep `cargo fmt` clean and add tests
+alongside backend behavior changes.
 
 ## Architecture Gotchas
 

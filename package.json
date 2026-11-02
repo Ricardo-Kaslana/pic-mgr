@@ -3,9 +3,35 @@
   "version": "0.3.16",
   "private": true,
   "type": "module",
+  "description": "A lightweight, local-first image manager built with Tauri 2, Vue 3 and SQLite.",
+  "license": "MIT",
+  "author": {
+    "name": "Dawn.Wang",
+    "url": "https://github.com/Ricardo-Kaslana"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ricardo-Kaslana/pic-mgr.git"
+  },
+  "homepage": "https://github.com/Ricardo-Kaslana/pic-mgr#readme",
+  "bugs": {
+    "url": "https://github.com/Ricardo-Kaslana/pic-mgr/issues"
+  },
+  "keywords": [
+    "tauri",
+    "vue",
+    "sqlite",
+    "image-manager",
+    "photo-gallery",
+    "desktop-app"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

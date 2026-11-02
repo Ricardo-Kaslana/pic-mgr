@@ -2,6 +2,10 @@
 name = "pic-mgr"
 version = "0.3.16"
 edition = "2021"
+description = "A lightweight, local-first image manager built with Tauri 2 and Vue 3."
+license = "MIT"
+authors = ["Dawn.Wang"]
+repository = "https://github.com/Ricardo-Kaslana/pic-mgr"
 
 [dependencies]
 tauri = { version = "2", features = [] }

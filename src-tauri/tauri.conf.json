@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "PicMgr — 本地图片管理器",
+        "title": "PicMgr",
         "width": 1080,
         "height": 720,
         "resizable": true,
@@ -28,6 +28,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Dawn.Wang",
+    "copyright": "Copyright © 2026 Dawn.Wang",
+    "category": "Photography",
+    "shortDescription": "A lightweight, local-first image manager.",
+    "longDescription": "PicMgr indexes local folders as workspaces and adds tags, ratings, notes and full-text search without ever modifying the original image files.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

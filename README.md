@@ -1,77 +1,127 @@
-# PicMgr — 本地图片管理器
+<div align="center">
+  <img src="src-tauri/icons/128x128@2x.png" width="112" alt="PicMgr logo" />
+  <h1>PicMgr</h1>
+  <p>A lightweight, local-first image manager for your desktop.</p>
 
-轻量、现代、美观的本地图片管理器。将文件夹设为工作区，为所有图片生成索引，支持标签、评分、备注、全文搜索。
+  <p>
+    <a href="https://github.com/Ricardo-Kaslana/pic-mgr/actions/workflows/ci.yml"><img src="https://github.com/Ricardo-Kaslana/pic-mgr/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/Ricardo-Kaslana/pic-mgr/releases"><img src="https://img.shields.io/github/v/release/Ricardo-Kaslana/pic-mgr?include_prereleases" alt="Latest release" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+    <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2" />
+    <img src="https://img.shields.io/badge/Vue-3-42B883?logo=vue.js&logoColor=white" alt="Vue 3" />
+  </p>
 
-**所有元数据只写 SQLite，永不修改原始图片文件。**
+  <p>
+    <a href="README.md">English</a> |
+    <a href="README.zh-CN.md">简体中文</a>
+  </p>
+</div>
 
-## 技术栈
+> **Your files stay yours.** PicMgr indexes local folders as workspaces and stores tags, ratings and notes in SQLite. It never modifies, moves or rewrites your original image files unless you explicitly ask it to.
 
-- **Tauri 2** — 桌面框架 (~10MB)
-- **Vue 3** + TypeScript + Pinia — 前端
-- **SQLite** + FTS5 — 元数据存储 + 全文搜索
-- **image-rs** — JPEG 缩略图生成
+## Features
 
-## 功能
+- **Workspaces** — add folders as workspaces, rescan or reconcile them when files change on disk.
+- **Fast indexing** — SHA-256 based incremental scan with duplicate detection, backed by SQLite and FTS5.
+- **Tags** — a global tag catalogue shared across workspaces; filter by tags, attach/detach in bulk, or delete a tag from the sidebar.
+- **Ratings and notes** — 0–5 stars plus free-form notes for every image.
+- **Full-text search** — search file names, paths and notes through SQLite FTS5.
+- **Thumbnail cache** — on-demand JPEG thumbnails in three sizes, cached on disk with an in-memory LRU for blob URLs.
+- **Safe file operations** — batch delete goes to the system recycle bin; batch move supports cross-device moves with conflict-safe suffixes.
+- **Duplicate detection** — groups images by SHA-256 hash so you can review redundant files.
+- **Metadata export** — export the current library as JSON or CSV.
+- **Comfortable browsing** — virtual scrolling, keyboard-driven lightbox, sort persistence, collapsible sidebars and a quick-locate button.
+- **Bilingual UI** — complete English and Simplified Chinese translations.
+- **Digital Darkroom theme** — a carefully tuned dark and light theme.
 
-- 🗂️ 工作区管理（创建/删除/选择/重新扫描）
-- 📸 图片扫描索引（SHA-256 哈希，增量扫描）
-- 🏷️ 标签系统（全局共享，跨工作区复用；侧栏筛选 + 详情面板 attach/detach + 批量操作；右键 chip 上下文菜单删除）
-- ⭐ 评分（0-5 星）
-- 📝 备注编辑
-- 🔍 全文搜索（FTS5）
-- 🖼️ JPEG 缩略图缓存（按需生成，S/M/L 三档尺寸）
-- 📊 元数据导出（JSON/CSV）
-- 🔎 重复图片检测（SHA-256 去重）
-- 📅 文件日期追踪（创建时间/修改时间/收录时间）
-- 🔄 重新扫描自动清除已删除的图片记录
-- 📋 一键复制文件名
-- 🗑️ 删除图片（移入回收站，支持批量）
-- 📁 移动图片（选择目标文件夹，支持批量）
-- 🖱️ 右键菜单（打开/复制路径/移动/移除/删除）
-- 🖼️ 全屏查看（双击缩略图或 hover 显形的左上角展开按钮，← → 翻页）
-- 🌐 中英文界面（vue-i18n）
-- 🎨 暗色/亮色主题（Digital Darkroom 美学）
-- 🎛️ 统一按钮系统（6 种语义变体 + 3 档尺寸）
-- ⚡ 虚拟滚动（大量图片高性能）
-- 🔃 排序控制（按文件名/收录时间/修改时间/创建时间，升降序切换；选择跨会话持久化）
-- 当前工作区名称显示在工具栏（返回按钮与图片计数之间，长名称自动省略）
-- 📍 快速定位（详情面板打开后自动滚动到并高亮选中图片，手动定位按钮）
-- ◀▶ 侧栏可折叠为 64px 图标列（chevron 切换，hover 显示 tooltip，localStorage 持久化，主题切换按钮在收起态默认透明，hover 才显灰）；工作区侧栏折叠状态同样跨会话持久化（useLocalStorage 统一管理所有偏好项）
+## Tech stack
 
-## 开发
+| Layer | Choice |
+| --- | --- |
+| Desktop shell | [Tauri 2](https://v2.tauri.app/) |
+| Frontend | Vue 3, TypeScript, Pinia, Vue Router |
+| Storage | SQLite (bundled via `rusqlite`) with FTS5 |
+| Thumbnails | [`image`](https://crates.io/crates/image) — JPEG, quality 80 |
+| Hashing | SHA-256 via `sha2` |
+| UI text | `vue-i18n` (`en`, `zh-CN`) |
+
+## Getting started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20 or newer
+- [Rust](https://www.rust-lang.org/tools/install) stable
+- The platform dependencies required by Tauri 2 — see the official [prerequisites guide](https://v2.tauri.app/start/prerequisites/)
+
+### Development
 
 ```bash
-# 安装依赖
 npm install
-
-# 开发模式
 npm run tauri dev
+```
 
-# 构建
+### Production build
+
+```bash
 npm run tauri build
 ```
 
-## 项目结构
+### Checks
 
+```bash
+npm run typecheck              # vue-tsc
+cd src-tauri && cargo fmt --check
+cd src-tauri && cargo test
 ```
+
+## How it works
+
+- Folders become **workspaces**; every scan records file metadata and a SHA-256 hash in SQLite.
+- All metadata — tags, ratings, notes, derived thumbnails — lives outside the original files.
+- The Rust backend exposes 29 Tauri commands split by domain (`commands/`, `db/`, `scanner/`).
+- The grid renders `ImageSummary` rows only; the detail panel loads the full `ImageRecord` on demand.
+- Thumbnails are generated lazily, wrapped in `catch_unwind` so malformed files cannot crash the app.
+
+For deeper details, see [docs/design/architecture.md](docs/design/architecture.md) and the [ADRs](docs/README.md).
+
+## Project structure
+
+```text
 pic-mgr/
-├── src/                    — Vue 前端
-│   ├── stores/             — 6 个 Pinia stores
-│   ├── views/              — 4 个页面
-│   ├── components/         — UI 组件
-│   └── i18n/               — vue-i18n 国际化
-├── src-tauri/              — Rust 后端
+├── src/                    # Vue 3 frontend
+│   ├── components/         # UI components
+│   ├── composables/        # Shared composables
+│   ├── i18n/               # en + zh-CN translations
+│   ├── router/             # Vue Router
+│   ├── stores/             # Pinia stores
+│   ├── types/              # Shared TypeScript types
+│   └── views/              # Workspace home, browser, dedup, settings
+├── src-tauri/              # Rust backend
 │   └── src/
-│       ├── commands/       — 23 个 Tauri commands
-│       ├── db/             — SQLite schema + queries
-│       └── scanner/        — 文件扫描 + 缩略图
-├── docs/                   — 设计文档 + ADR
-└── CLAUDE.md               — Agent 技能配置
+│       ├── commands/       # Tauri command handlers
+│       ├── db/             # Schema, migrations and queries
+│       └── scanner/        # Filesystem scan + thumbnail cache
+├── docs/                   # Design records + ADRs
+├── AGENTS.md               # Contributor and architecture invariants
+└── CHANGELOG.md
 ```
 
-## 文档
+## Documentation
 
-- [设计规格](docs/superpowers/specs/2026-06-07-pic-mgr-design.md)
-- [实现计划](docs/superpowers/plans/2026-06-07-pic-mgr-implementation.md)
-- [架构决策](docs/adr/)
-- [上下文地图](CONTEXT-MAP.md)
+- [Architecture overview](docs/design/architecture.md)
+- [Design records](docs/design/)
+- [Architecture decision records](docs/adr/)
+- [Changelog](CHANGELOG.md)
+- [Contributor guide](CONTRIBUTING.md)
+
+## Contributing
+
+Bug reports, feature requests and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR, and note that this project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+
+If you find a security issue, please follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+Copyright © 2026 Dawn.Wang.

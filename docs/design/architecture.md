@@ -399,10 +399,9 @@ pic-mgr/
 ├── vite.config.ts
 ├── tsconfig.json
 ├── package.json
-├── CLAUDE.md               — Agent skills 配置
+├── AGENTS.md               — 开发约定与架构约束
 ├── docs/
-│   ├── agents/             — 技能配置
-│   ├── superpowers/specs/  — 设计规格说明
+│   ├── design/             — 设计记录
 │   └── adr/                — 架构决策记录
-└── .scratch/               — 本地 issue tracker
+└── README.md
 ```

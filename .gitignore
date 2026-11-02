@@ -4,11 +4,16 @@ src-tauri/target/
 temp/
 *.tsbuildinfo
 
-# AI / IDE
+# AI / IDE (local tooling state)
+.agents/
 .claude/
 .codegraph/
 .omo/
+.qoder/
 .superpowers/
+
+# Tauri generated files
+src-tauri/gen/schemas/
 
 # OS
 .DS_Store
