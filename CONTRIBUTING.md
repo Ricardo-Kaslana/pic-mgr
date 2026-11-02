@@ -41,6 +41,20 @@ cd src-tauri && cargo test
 - Read [AGENTS.md](AGENTS.md) before touching the scanner, database schema, tag model or
   thumbnail pipeline — it documents invariants that are easy to break.
 
+## Releasing
+
+Maintainers publish a release by pushing a version tag:
+
+1. Update the version in `package.json`, `src-tauri/Cargo.toml` and
+   `src-tauri/tauri.conf.json`, then refresh the lockfiles
+   (`npm install --package-lock-only`, `cd src-tauri && cargo check`).
+2. Add a `CHANGELOG.md` entry.
+3. Commit, tag (`git tag vX.Y.Z`) and push the tag.
+4. The `Release` workflow builds installers for Windows, macOS and Linux and opens a
+   draft GitHub release. Review the assets and publish it.
+
+The installers are unsigned, so Windows SmartScreen and macOS Gatekeeper may warn users.
+
 ## Code style
 
 - Rust: `cargo fmt` (default rustfmt settings).
