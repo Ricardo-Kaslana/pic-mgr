@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Ricardo-Kaslana/pic-mgr/security/advisories/new
+    about: Report security issues privately instead of opening a public issue.
+  - name: Documentation
+    url: https://github.com/Ricardo-Kaslana/pic-mgr/tree/master/docs
+    about: Read the architecture notes and design records first.
