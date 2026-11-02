@@ -1,9 +1,13 @@
-use tauri::{State, AppHandle, Emitter};
 use crate::models::ScanProgress;
 use crate::AppState;
+use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
-pub fn scan_workspace(state: State<AppState>, app: AppHandle, id: i64) -> Result<ScanProgress, String> {
+pub fn scan_workspace(
+    state: State<AppState>,
+    app: AppHandle,
+    id: i64,
+) -> Result<ScanProgress, String> {
     // Step 1: Get workspace path (short lock)
     let ws_path = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
@@ -34,13 +38,17 @@ pub fn scan_workspace(state: State<AppState>, app: AppHandle, id: i64) -> Result
         }
         conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
 
-        app.emit("scan-progress", ScanProgress {
-            total,
-            processed,
-            new_files: processed,
-            modified_files: 0,
-            finished: false,
-        }).map_err(|e| e.to_string())?;
+        app.emit(
+            "scan-progress",
+            ScanProgress {
+                total,
+                processed,
+                new_files: processed,
+                modified_files: 0,
+                finished: false,
+            },
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     let final_progress = ScanProgress {
@@ -51,7 +59,8 @@ pub fn scan_workspace(state: State<AppState>, app: AppHandle, id: i64) -> Result
         finished: true,
     };
 
-    app.emit("scan-progress", final_progress.clone()).map_err(|e| e.to_string())?;
+    app.emit("scan-progress", final_progress.clone())
+        .map_err(|e| e.to_string())?;
 
     Ok(final_progress)
 }
@@ -82,8 +91,11 @@ pub fn rescan_workspace(
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
             .collect();
-        conn.execute("DELETE FROM images WHERE workspace_id = ?1", rusqlite::params![id])
-            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM images WHERE workspace_id = ?1",
+            rusqlite::params![id],
+        )
+        .map_err(|e| e.to_string())?;
         ids
     };
     // Rescan inserts rows with fresh AUTOINCREMENT ids, so the old {id}.jpg

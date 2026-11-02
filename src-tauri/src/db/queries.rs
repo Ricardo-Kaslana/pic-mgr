@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use crate::models::*;
 use crate::scanner::reconcile::DbEntry;
 use rusqlite::{params, params_from_iter, Connection, Result, Row};
-use crate::models::*;
+use std::collections::HashMap;
 
 /// Errors specific to tag operations. Validation failures surface here so the
 /// IPC boundary can show them as a clean user-facing message; SQLite errors
@@ -102,7 +102,10 @@ fn row_to_workspace(row: &Row) -> Result<Workspace> {
 /// SQL before the filter clause is spliced in. Every placeholder `?N` inside
 /// the returned fragment is numbered starting from `param_offset + 1` so that
 /// indices never collide with the caller's own `?1 … ?{param_offset}`.
-fn build_filter_clause(filters: &ImageFilters, param_offset: usize) -> (String, Vec<rusqlite::types::Value>) {
+fn build_filter_clause(
+    filters: &ImageFilters,
+    param_offset: usize,
+) -> (String, Vec<rusqlite::types::Value>) {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<rusqlite::types::Value> = Vec::new();
 
@@ -187,7 +190,7 @@ pub fn insert_workspace(conn: &Connection, name: &str, path: &str) -> Result<Wor
 
 pub fn list_workspaces(conn: &Connection) -> Result<Vec<Workspace>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, path, created_at, updated_at FROM workspaces ORDER BY updated_at DESC"
+        "SELECT id, name, path, created_at, updated_at FROM workspaces ORDER BY updated_at DESC",
     )?;
     let rows = stmt.query_map([], row_to_workspace)?;
     rows.collect()
@@ -208,14 +211,8 @@ pub fn delete_workspace(conn: &Connection, id: i64) -> Result<()> {
             "DELETE FROM image_tags WHERE image_id IN (SELECT id FROM images WHERE workspace_id = ?1)",
             params![id],
         )?;
-        conn.execute(
-            "DELETE FROM images WHERE workspace_id = ?1",
-            params![id],
-        )?;
-        conn.execute(
-            "DELETE FROM workspaces WHERE id = ?1",
-            params![id],
-        )?;
+        conn.execute("DELETE FROM images WHERE workspace_id = ?1", params![id])?;
+        conn.execute("DELETE FROM workspaces WHERE id = ?1", params![id])?;
         // Sweep orphan tags last so the cascade above can finish first.
         // Tags are global (no workspace_id column on `tags`): any tag whose only
         // references lived inside the workspace we just deleted now has zero
@@ -247,9 +244,8 @@ pub fn delete_workspace(conn: &Connection, id: i64) -> Result<()> {
 }
 
 pub fn get_workspace(conn: &Connection, id: i64) -> Result<Option<Workspace>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, path, created_at, updated_at FROM workspaces WHERE id = ?1"
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, path, created_at, updated_at FROM workspaces WHERE id = ?1")?;
     let mut rows = stmt.query_map(params![id], row_to_workspace)?;
     Ok(rows.next().transpose()?)
 }
@@ -288,11 +284,9 @@ pub fn get_images(
     let mut all_params: Vec<rusqlite::types::Value> = Vec::with_capacity(filter_params.len() + 1);
     all_params.push(rusqlite::types::Value::from(workspace_id));
     all_params.extend(filter_params.iter().cloned());
-    let total: i64 = conn.query_row(
-        &count_sql,
-        params_from_iter(all_params.iter()),
-        |row| row.get(0),
-    )?;
+    let total: i64 = conn.query_row(&count_sql, params_from_iter(all_params.iter()), |row| {
+        row.get(0)
+    })?;
 
     let offset = (page - 1) * page_size;
     let sql = format!(
@@ -337,11 +331,9 @@ pub fn get_images_light(
     let mut all_params: Vec<rusqlite::types::Value> = Vec::with_capacity(filter_params.len() + 1);
     all_params.push(rusqlite::types::Value::from(workspace_id));
     all_params.extend(filter_params.iter().cloned());
-    let total: i64 = conn.query_row(
-        &count_sql,
-        params_from_iter(all_params.iter()),
-        |row| row.get(0),
-    )?;
+    let total: i64 = conn.query_row(&count_sql, params_from_iter(all_params.iter()), |row| {
+        row.get(0)
+    })?;
 
     let offset = (page - 1) * page_size;
     let sql = format!(
@@ -371,10 +363,7 @@ pub fn get_images_light(
 /// Fetch a batch of image summaries by id, preserving input order.
 /// Used by the grid after a sort/filter change to refresh just the visible
 /// set without re-paginating from scratch.
-pub fn get_image_summaries_by_ids(
-    conn: &Connection,
-    ids: &[i64],
-) -> Result<Vec<ImageSummary>> {
+pub fn get_image_summaries_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<ImageSummary>> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -390,7 +379,8 @@ pub fn get_image_summaries_by_ids(
     let rows = stmt.query_map(params_from_iter(ids.iter()), row_to_image_summary)?;
     let mut out: Vec<ImageSummary> = rows.collect::<Result<Vec<_>>>()?;
     // Preserve input order (SQLite does not guarantee IN(...) order).
-    let pos: std::collections::HashMap<i64, usize> = ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let pos: std::collections::HashMap<i64, usize> =
+        ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
     out.sort_by_key(|s| pos.get(&s.id).copied().unwrap_or(usize::MAX));
     Ok(out)
 }
@@ -400,7 +390,7 @@ pub fn get_image_detail(conn: &Connection, image_id: i64) -> Result<Option<Image
         "SELECT id, workspace_id, relative_path, file_name, file_size, file_hash,
          width, height, format, thumbnail_path, notes, rating,
          created_at, file_created_at, updated_at, indexed_at, last_viewed_at
-         FROM images WHERE id = ?1"
+         FROM images WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![image_id], row_to_image_record)?;
     Ok(rows.next().transpose()?)
@@ -437,9 +427,12 @@ pub fn search_images(
          INNER JOIN images_fts fts ON i.id = fts.rowid
          WHERE images_fts MATCH ?1 AND i.workspace_id = ?2
          ORDER BY rank
-         LIMIT ?3 OFFSET ?4"
+         LIMIT ?3 OFFSET ?4",
     )?;
-    let rows = stmt.query_map(params![fts_query, workspace_id, page_size, offset], row_to_image_record)?;
+    let rows = stmt.query_map(
+        params![fts_query, workspace_id, page_size, offset],
+        row_to_image_record,
+    )?;
     let images: Result<Vec<ImageRecord>> = rows.collect();
 
     Ok(ImagePage {
@@ -474,10 +467,11 @@ pub fn find_duplicate_groups(
          FROM images i
          INNER JOIN dup_hashes d ON i.file_hash = d.file_hash
          WHERE i.workspace_id = ?1
-         ORDER BY i.file_hash, i.id"
+         ORDER BY i.file_hash, i.id",
     )?;
     let rows = stmt.query_map(params![workspace_id], row_to_image_record)?;
-    let mut by_hash: std::collections::HashMap<String, Vec<ImageRecord>> = std::collections::HashMap::new();
+    let mut by_hash: std::collections::HashMap<String, Vec<ImageRecord>> =
+        std::collections::HashMap::new();
     for row in rows {
         let r = row?;
         if let Some(h) = r.file_hash.clone() {
@@ -539,7 +533,10 @@ pub fn batch_update_tags(
             }
             "set" => {
                 for &img_id in image_ids {
-                    conn.execute("DELETE FROM image_tags WHERE image_id = ?1", params![img_id])?;
+                    conn.execute(
+                        "DELETE FROM image_tags WHERE image_id = ?1",
+                        params![img_id],
+                    )?;
                     for &tag_id in tag_ids {
                         conn.execute(
                             "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?1, ?2)",
@@ -576,7 +573,7 @@ pub fn get_tags(conn: &Connection, workspace_id: i64) -> Result<Vec<TagWithCount
          INNER JOIN images i ON it.image_id = i.id
          WHERE i.workspace_id = ?1
          GROUP BY t.id, t.name, t.color
-         ORDER BY cnt DESC, t.name ASC"
+         ORDER BY cnt DESC, t.name ASC",
     )?;
     let rows = stmt.query_map(params![workspace_id], |row| {
         Ok(TagWithCount {
@@ -604,9 +601,7 @@ pub fn get_tags(conn: &Connection, workspace_id: i64) -> Result<Vec<TagWithCount
 /// discoverable so the picker doesn't propose the same name as a
 /// brand-new tag and collide on UNIQUE.
 pub fn get_all_tags(conn: &Connection) -> Result<Vec<Tag>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, color FROM tags ORDER BY name ASC"
-    )?;
+    let mut stmt = conn.prepare("SELECT id, name, color FROM tags ORDER BY name ASC")?;
     let rows = stmt.query_map([], |row| {
         Ok(Tag {
             id: row.get(0)?,
@@ -617,7 +612,11 @@ pub fn get_all_tags(conn: &Connection) -> Result<Vec<Tag>> {
     rows.collect()
 }
 
-pub fn create_tag(conn: &Connection, name: &str, color: Option<&str>) -> std::result::Result<Tag, TagError> {
+pub fn create_tag(
+    conn: &Connection,
+    name: &str,
+    color: Option<&str>,
+) -> std::result::Result<Tag, TagError> {
     // Trim surrounding whitespace so users can't end up with " 风景 " and "风景"
     // coexisting as separate tag definitions (and the trailing-space variant
     // being nearly impossible to click out of the chip). Case is preserved on
@@ -652,7 +651,7 @@ pub fn get_tags_for_image(conn: &Connection, image_id: i64) -> Result<Vec<Tag>> 
     let mut stmt = conn.prepare(
         "SELECT t.id, t.name, t.color FROM tags t
          INNER JOIN image_tags it ON t.id = it.tag_id
-         WHERE it.image_id = ?1"
+         WHERE it.image_id = ?1",
     )?;
     let rows = stmt.query_map(params![image_id], |row| {
         Ok(Tag {
@@ -696,11 +695,14 @@ pub fn get_image_paths(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, i64, 
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params_from_iter(ids.iter()), |row| {
-        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?))
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
     })?;
     rows.collect()
 }
-
 
 /// Load the lightweight index used by sync_workspace's reconcile step.
 /// Returns relative_path -> DbEntry for every row in `images` for the given
@@ -709,11 +711,11 @@ pub fn get_image_paths(conn: &Connection, ids: &[i64]) -> Result<Vec<(i64, i64, 
 pub fn load_index(conn: &Connection, workspace_id: i64) -> Result<HashMap<String, DbEntry>> {
     let mut stmt = conn.prepare(
         "SELECT id, relative_path, file_size, created_at, thumbnail_path
-         FROM images WHERE workspace_id = ?1"
+         FROM images WHERE workspace_id = ?1",
     )?;
     let rows = stmt.query_map(params![workspace_id], |row| {
         Ok((
-            row.get::<_, String>(1)?,           // relative_path (becomes map key)
+            row.get::<_, String>(1)?, // relative_path (becomes map key)
             DbEntry {
                 id: row.get(0)?,
                 size: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
@@ -728,7 +730,7 @@ pub fn load_index(conn: &Connection, workspace_id: i64) -> Result<HashMap<String
         out.insert(rel, entry);
     }
     Ok(out)
-}// ── Helpers ──
+} // ── Helpers ──
 
 fn chrono_now(conn: &Connection) -> String {
     conn.query_row("SELECT datetime('now')", [], |row| row.get(0))
@@ -752,9 +754,15 @@ mod tests {
             sort_dir: None,
         };
         let (clause, params) = build_filter_clause(&filters, 1);
-        assert!(clause.contains("i.id IN (SELECT image_id FROM image_tags"), "clause: {clause}");
+        assert!(
+            clause.contains("i.id IN (SELECT image_id FROM image_tags"),
+            "clause: {clause}"
+        );
         assert!(clause.contains("tag_id IN (?2)"), "clause: {clause}");
-        assert!(clause.contains("COUNT(DISTINCT tag_id) = 1"), "clause: {clause}");
+        assert!(
+            clause.contains("COUNT(DISTINCT tag_id) = 1"),
+            "clause: {clause}"
+        );
         assert_eq!(params.len(), 1);
         assert_eq!(params[0], rusqlite::types::Value::from(123i64));
     }
@@ -772,7 +780,10 @@ mod tests {
         };
         let (clause, params) = build_filter_clause(&filters, 1);
         assert!(clause.contains("tag_id IN (?2,?3)"), "clause: {clause}");
-        assert!(clause.contains("COUNT(DISTINCT tag_id) = 2"), "clause: {clause}");
+        assert!(
+            clause.contains("COUNT(DISTINCT tag_id) = 2"),
+            "clause: {clause}"
+        );
         assert_eq!(params.len(), 2);
     }
 
@@ -788,7 +799,10 @@ mod tests {
             sort_dir: None,
         };
         let (clause, params) = build_filter_clause(&filters, 1);
-        assert!(!clause.contains("image_tags"), "empty tag list should be a no-op: {clause}");
+        assert!(
+            !clause.contains("image_tags"),
+            "empty tag list should be a no-op: {clause}"
+        );
         assert_eq!(params.len(), 0);
     }
 
@@ -913,11 +927,9 @@ mod tests {
         let ws = insert_workspace(&conn, "w", "/tmp/w").unwrap();
         let img = insert_image(&conn, &make_image(ws.id, "a.jpg")).unwrap();
         let used = conn
-            .query_row(
-                "SELECT id FROM tags WHERE name = 'used'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
+            .query_row("SELECT id FROM tags WHERE name = 'used'", [], |row| {
+                row.get::<_, i64>(0)
+            })
             .unwrap();
         batch_update_tags(&conn, &[img], &[used], "add").unwrap();
 
@@ -943,7 +955,10 @@ mod tests {
     fn create_tag_trims_surrounding_whitespace() {
         let conn = fresh_db();
         let tag = create_tag(&conn, "  风景  ", None).unwrap();
-        assert_eq!(tag.name, "风景", "leading/trailing whitespace must be stripped");
+        assert_eq!(
+            tag.name, "风景",
+            "leading/trailing whitespace must be stripped"
+        );
     }
 
     #[test]

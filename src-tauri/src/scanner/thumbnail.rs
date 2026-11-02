@@ -23,18 +23,25 @@ impl ThumbnailCache {
 
     /// Returns (cache_path, original_width, original_height) so callers can
     /// backfill the width/height columns, which are NULL at scan time.
-    pub fn generate(&self, source_path: &Path, image_id: i64) -> Result<(String, u32, u32), String> {
+    pub fn generate(
+        &self,
+        source_path: &Path,
+        image_id: i64,
+    ) -> Result<(String, u32, u32), String> {
         // Read file once into buffer (was 3 separate reads: metadata + magic + decode)
-        let buf = std::fs::read(source_path)
-            .map_err(|e| format!("Cannot read file: {}", e))?;
+        let buf = std::fs::read(source_path).map_err(|e| format!("Cannot read file: {}", e))?;
         let file_size = buf.len();
 
-        let ext = source_path.extension()
+        let ext = source_path
+            .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("none");
 
         let magic = if buf.len() >= 4 {
-            format!("{:02X} {:02X} {:02X} {:02X}", buf[0], buf[1], buf[2], buf[3])
+            format!(
+                "{:02X} {:02X} {:02X} {:02X}",
+                buf[0], buf[1], buf[2], buf[3]
+            )
         } else {
             "file too small".to_string()
         };

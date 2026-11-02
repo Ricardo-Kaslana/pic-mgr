@@ -1,14 +1,12 @@
-pub mod thumbnail;
 pub mod reconcile;
+pub mod thumbnail;
 
+use crate::models::ImageRecord;
+use crate::scanner::reconcile::FsEntry;
 use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
-use crate::scanner::reconcile::FsEntry;
-use crate::models::ImageRecord;
-const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif",
-];
+const SUPPORTED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif"];
 
 fn is_image_file(path: &Path) -> bool {
     path.extension()
@@ -39,7 +37,10 @@ fn chrono_lite(unix_ts: i64) -> String {
     let minutes = (remaining % 3600) / 60;
     let seconds = remaining % 60;
     let (y, m, d) = days_since_epoch_to_date(days);
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", y, m, d, hours, minutes, seconds)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
+        y, m, d, hours, minutes, seconds
+    )
 }
 
 fn days_since_epoch_to_date(days: i64) -> (i64, i64, i64) {
@@ -47,7 +48,9 @@ fn days_since_epoch_to_date(days: i64) -> (i64, i64, i64) {
     let mut year = 1970;
     loop {
         let days_in_year = if is_leap(year) { 366 } else { 365 };
-        if days < days_in_year { break; }
+        if days < days_in_year {
+            break;
+        }
         days -= days_in_year;
         year += 1;
     }
@@ -58,7 +61,9 @@ fn days_since_epoch_to_date(days: i64) -> (i64, i64, i64) {
     };
     let mut month = 1;
     for &len in month_lengths.iter() {
-        if days < len { break; }
+        if days < len {
+            break;
+        }
         days -= len;
         month += 1;
     }
@@ -140,11 +145,13 @@ pub fn scan_directory_individually(workspace_id: i64, workspace_path: &Path) -> 
         .map(|path| {
             let relative = path.strip_prefix(workspace_path).unwrap_or(&path);
             let relative_str = relative.to_string_lossy().to_string();
-            let file_name = path.file_name()
+            let file_name = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("")
                 .to_string();
-            let format = path.extension()
+            let format = path
+                .extension()
                 .and_then(|e| e.to_str())
                 .map(|e| e.to_lowercase());
             let metadata = fs::metadata(&path).ok();

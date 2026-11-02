@@ -1,10 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use pic_mgr_lib::commands;
-use pic_mgr_lib::db::Database;
-use pic_mgr_lib::AppState;
-use pic_mgr_lib::scanner::thumbnail::ThumbnailCache;
 use pic_mgr_lib::commands::thumbnail::ThumbnailState;
+use pic_mgr_lib::db::Database;
+use pic_mgr_lib::scanner::thumbnail::ThumbnailCache;
+use pic_mgr_lib::AppState;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -15,9 +15,11 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            let app_data_dir = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let database = Database::new(&app_data_dir)
-                .expect("Failed to initialize database");
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            let database = Database::new(&app_data_dir).expect("Failed to initialize database");
 
             let cache_dir = app_data_dir.join("thumbnails");
             let thumb_cache = ThumbnailCache::new(cache_dir);

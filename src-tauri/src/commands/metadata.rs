@@ -1,7 +1,7 @@
-use tauri::State;
+use crate::models::{MoveResult, TrashResult};
 use crate::AppState;
-use crate::models::{TrashResult, MoveResult};
 use std::path::PathBuf;
+use tauri::State;
 
 #[tauri::command]
 pub fn open_in_explorer(path: String) -> Result<(), String> {
@@ -24,7 +24,11 @@ pub fn open_in_explorer(path: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
-            .arg(std::path::Path::new(&path).parent().unwrap_or(std::path::Path::new(&path)))
+            .arg(
+                std::path::Path::new(&path)
+                    .parent()
+                    .unwrap_or(std::path::Path::new(&path)),
+            )
             .spawn()
             .map_err(|e| e.to_string())?;
     }
@@ -41,8 +45,11 @@ pub fn delete_image(state: State<AppState>, id: i64) -> Result<(), String> {
 /// FTS cleanup is handled by AFTER DELETE trigger on images.
 fn delete_db_records(conn: &rusqlite::Connection, ids: &[i64]) -> Result<(), String> {
     for &id in ids {
-        conn.execute("DELETE FROM image_tags WHERE image_id = ?1", rusqlite::params![id])
-            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM image_tags WHERE image_id = ?1",
+            rusqlite::params![id],
+        )
+        .map_err(|e| e.to_string())?;
         conn.execute("DELETE FROM images WHERE id = ?1", rusqlite::params![id])
             .map_err(|e| e.to_string())?;
     }
@@ -50,7 +57,10 @@ fn delete_db_records(conn: &rusqlite::Connection, ids: &[i64]) -> Result<(), Str
 }
 
 /// Helper: delete thumbnail cache files for a list of image IDs
-pub(crate) fn delete_thumbnail_files(cache: &crate::scanner::thumbnail::ThumbnailCache, ids: &[i64]) {
+pub(crate) fn delete_thumbnail_files(
+    cache: &crate::scanner::thumbnail::ThumbnailCache,
+    ids: &[i64],
+) {
     for &id in ids {
         let path = cache.cache_path(id);
         if path.exists() {
@@ -67,7 +77,11 @@ pub fn trash_images(
     ids: Vec<i64>,
 ) -> Result<TrashResult, String> {
     if ids.is_empty() {
-        return Ok(TrashResult { success: 0, failed: 0, errors: vec![] });
+        return Ok(TrashResult {
+            success: 0,
+            failed: 0,
+            errors: vec![],
+        });
     }
 
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
@@ -139,7 +153,11 @@ pub fn move_images(
     dest_workspace_id: Option<i64>,
 ) -> Result<MoveResult, String> {
     if ids.is_empty() {
-        return Ok(MoveResult { success: 0, failed: 0, errors: vec![] });
+        return Ok(MoveResult {
+            success: 0,
+            failed: 0,
+            errors: vec![],
+        });
     }
 
     // Resolve destination from workspace ID if provided
@@ -151,12 +169,16 @@ pub fn move_images(
         drop(conn);
         workspace.path
     } else {
-        dest_dir.ok_or_else(|| "Either dest_dir or dest_workspace_id must be provided".to_string())?
+        dest_dir
+            .ok_or_else(|| "Either dest_dir or dest_workspace_id must be provided".to_string())?
     };
 
     let dest = PathBuf::from(&dest_dir_resolved);
     if !dest.is_dir() {
-        return Err(format!("Destination folder does not exist: {}", dest_dir_resolved));
+        return Err(format!(
+            "Destination folder does not exist: {}",
+            dest_dir_resolved
+        ));
     }
 
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
@@ -203,9 +225,13 @@ pub fn move_images(
         let mut dest_file = dest.join(&img.file_name);
         let mut new_file_name = img.file_name.clone();
         if dest_file.exists() {
-            let stem = PathBuf::from(&img.file_name).file_stem()
-                .unwrap_or_default().to_string_lossy().to_string();
-            let ext = PathBuf::from(&img.file_name).extension()
+            let stem = PathBuf::from(&img.file_name)
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let ext = PathBuf::from(&img.file_name)
+                .extension()
                 .map(|e| format!(".{}", e.to_string_lossy()))
                 .unwrap_or_default();
             for i in 1..10000 {
@@ -224,9 +250,8 @@ pub fn move_images(
         }
 
         // Try rename first; fall back to copy+delete for cross-drive moves
-        let move_result = std::fs::rename(&src, &dest_file).or_else(|_| {
-            std::fs::copy(&src, &dest_file).and_then(|_| std::fs::remove_file(&src))
-        });
+        let move_result = std::fs::rename(&src, &dest_file)
+            .or_else(|_| std::fs::copy(&src, &dest_file).and_then(|_| std::fs::remove_file(&src)));
 
         match move_result {
             Ok(()) => {
@@ -257,7 +282,8 @@ pub fn move_images(
         for m in &moved {
             if let Some(target_ws_id) = target_workspace_id {
                 // Cross-workspace move: update workspace_id + relative_path + file_name
-                let new_relative = m.dest_file
+                let new_relative = m
+                    .dest_file
                     .strip_prefix(&PathBuf::from(&dest_dir_resolved))
                     .map(|r| r.to_string_lossy().replace('\\', "/"))
                     .unwrap_or_else(|_| m.new_file_name.clone());

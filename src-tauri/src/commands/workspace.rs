@@ -1,9 +1,13 @@
-use tauri::State;
 use crate::models::Workspace;
 use crate::AppState;
+use tauri::State;
 
 #[tauri::command]
-pub fn create_workspace(state: State<AppState>, name: String, path: String) -> Result<Workspace, String> {
+pub fn create_workspace(
+    state: State<AppState>,
+    name: String,
+    path: String,
+) -> Result<Workspace, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     crate::db::queries::insert_workspace(&conn, &name, &path).map_err(|e| e.to_string())
 }

@@ -1,5 +1,5 @@
-pub mod schema;
 pub mod queries;
+pub mod schema;
 
 use rusqlite::{Connection, Result};
 use std::path::PathBuf;
@@ -28,10 +28,9 @@ impl Database {
         )?;
         conn.execute_batch(schema::CREATE_TABLES_SQL)?;
         // Migrations: add columns that may not exist in older databases
-        conn.execute_batch(
-            "ALTER TABLE images ADD COLUMN file_created_at TEXT;"
-        ).ok(); // ignore error if column already exists
-        // Migration: update FTS triggers to use rowid-only delete (skip content verification)
+        conn.execute_batch("ALTER TABLE images ADD COLUMN file_created_at TEXT;")
+            .ok(); // ignore error if column already exists
+                   // Migration: update FTS triggers to use rowid-only delete (skip content verification)
         conn.execute_batch(
             "DROP TRIGGER IF EXISTS images_fts_delete;
              DROP TRIGGER IF EXISTS images_fts_update;

@@ -1,7 +1,7 @@
-use tauri::{State, Emitter};
 use crate::AppState;
-use std::sync::Mutex;
 use std::collections::HashMap;
+use std::sync::Mutex;
+use tauri::{Emitter, State};
 
 pub struct ThumbnailState {
     pub cache: Mutex<crate::scanner::thumbnail::ThumbnailCache>,
@@ -16,7 +16,10 @@ fn get_workspace_path_cached(
     workspace_id: i64,
 ) -> Result<std::path::PathBuf, String> {
     {
-        let paths = thumb_state.workspace_paths.lock().map_err(|e| e.to_string())?;
+        let paths = thumb_state
+            .workspace_paths
+            .lock()
+            .map_err(|e| e.to_string())?;
         if let Some(path) = paths.get(&workspace_id) {
             return Ok(path.clone());
         }
@@ -25,7 +28,10 @@ fn get_workspace_path_cached(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Workspace {} not found", workspace_id))?;
     let path = std::path::PathBuf::from(&ws.path);
-    let mut paths = thumb_state.workspace_paths.lock().map_err(|e| e.to_string())?;
+    let mut paths = thumb_state
+        .workspace_paths
+        .lock()
+        .map_err(|e| e.to_string())?;
     paths.insert(workspace_id, path.clone());
     Ok(path)
 }
@@ -61,7 +67,10 @@ pub fn get_thumbnail(
         match result {
             Ok(Ok(out)) => Ok(out),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(format!("Failed to process image: {}", source_path.display())),
+            Err(_) => Err(format!(
+                "Failed to process image: {}",
+                source_path.display()
+            )),
         }
     };
 
@@ -72,7 +81,9 @@ pub fn get_thumbnail(
     }
 
     let cache = thumb_state.cache.lock().map_err(|e| e.to_string())?;
-    cache.get_bytes(image_id).ok_or_else(|| "Failed to read generated thumbnail".to_string())
+    cache
+        .get_bytes(image_id)
+        .ok_or_else(|| "Failed to read generated thumbnail".to_string())
 }
 
 /// Batch thumbnail loading: single IPC call for multiple image IDs.
@@ -96,7 +107,10 @@ pub fn get_thumbnails_batch(
         let cache = thumb_state.cache.lock().map_err(|e| e.to_string())?;
         for &id in &image_ids {
             if let Some(bytes) = cache.get_bytes(id) {
-                results.push(ThumbnailBatchEntry { image_id: id, bytes });
+                results.push(ThumbnailBatchEntry {
+                    image_id: id,
+                    bytes,
+                });
             } else {
                 miss_ids.push(id);
             }
@@ -112,8 +126,8 @@ pub fn get_thumbnails_batch(
     // so we don't read the image just to find the cache is already populated.
     let (miss_records, _ws_paths) = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
-        let all_paths = crate::db::queries::get_image_paths(&conn, &miss_ids)
-            .map_err(|e| e.to_string())?;
+        let all_paths =
+            crate::db::queries::get_image_paths(&conn, &miss_ids).map_err(|e| e.to_string())?;
 
         // Resolve every distinct workspace_id in one pass, reusing the cache.
         let mut ws_paths: HashMap<i64, std::path::PathBuf> = HashMap::new();
@@ -133,7 +147,10 @@ pub fn get_thumbnails_batch(
                 // The cache file is on disk; let the frontend see it as a hit
                 // by reading it back. (Cheaper than re-decoding the source.)
                 if let Ok(bytes) = std::fs::read(&thumb_path) {
-                    results.push(ThumbnailBatchEntry { image_id: id, bytes });
+                    results.push(ThumbnailBatchEntry {
+                        image_id: id,
+                        bytes,
+                    });
                 }
                 continue;
             }
@@ -174,7 +191,10 @@ pub fn get_thumbnails_batch(
         let cache = thumb_state.cache.lock().map_err(|e| e.to_string())?;
         for (id, _, _, _) in &paths_to_update {
             if let Some(bytes) = cache.get_bytes(*id) {
-                results.push(ThumbnailBatchEntry { image_id: *id, bytes });
+                results.push(ThumbnailBatchEntry {
+                    image_id: *id,
+                    bytes,
+                });
             }
         }
     }
@@ -204,7 +224,10 @@ pub fn generate_thumbnail(
         match result {
             Ok(Ok(out)) => Ok(out),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(format!("Failed to process image: {}", source_path.display())),
+            Err(_) => Err(format!(
+                "Failed to process image: {}",
+                source_path.display()
+            )),
         }
     };
 
@@ -235,8 +258,8 @@ pub fn generate_thumbnails_batch(
     // thumbnail already exists on disk in the same pass.
     let records: Vec<(i64, std::path::PathBuf)> = {
         let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
-        let all_paths = crate::db::queries::get_image_paths(&conn, &image_ids)
-            .map_err(|e| e.to_string())?;
+        let all_paths =
+            crate::db::queries::get_image_paths(&conn, &image_ids).map_err(|e| e.to_string())?;
 
         // Resolve distinct workspace paths once.
         let mut ws_paths: HashMap<i64, std::path::PathBuf> = HashMap::new();
@@ -284,7 +307,9 @@ pub fn generate_thumbnails_batch(
                         generated += 1;
                         paths_to_update.push((id, thumb_path, w, h));
                     }
-                    _ => { failed += 1; }
+                    _ => {
+                        failed += 1;
+                    }
                 }
             }
         }
@@ -296,12 +321,16 @@ pub fn generate_thumbnails_batch(
             }
         }
 
-        app.emit("thumbnail-progress", crate::models::ThumbnailProgress {
-            total,
-            generated,
-            failed,
-            finished: generated + failed >= total,
-        }).map_err(|e| e.to_string())?;
+        app.emit(
+            "thumbnail-progress",
+            crate::models::ThumbnailProgress {
+                total,
+                generated,
+                failed,
+                finished: generated + failed >= total,
+            },
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     Ok(())

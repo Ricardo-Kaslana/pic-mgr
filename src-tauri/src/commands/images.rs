@@ -1,6 +1,6 @@
-use tauri::State;
-use crate::models::{ImagePage, ImageSummaryPage, ImageDetail, ImageFilters};
+use crate::models::{ImageDetail, ImageFilters, ImagePage, ImageSummaryPage};
 use crate::AppState;
+use tauri::State;
 
 #[derive(serde::Serialize)]
 pub struct DuplicateGroup {
@@ -74,8 +74,8 @@ pub fn get_image_detail(state: State<AppState>, image_id: i64) -> Result<ImageDe
         let record = crate::db::queries::get_image_detail(&conn, image_id)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "Image not found".to_string())?;
-        let tags = crate::db::queries::get_tags_for_image(&conn, image_id)
-            .map_err(|e| e.to_string())?;
+        let tags =
+            crate::db::queries::get_tags_for_image(&conn, image_id).map_err(|e| e.to_string())?;
         // Rows indexed before dimension backfill existed (or whose thumbnail
         // already sat on disk, skipping generate()) have NULL width/height.
         let ws_path = if record.width.is_none() || record.height.is_none() {

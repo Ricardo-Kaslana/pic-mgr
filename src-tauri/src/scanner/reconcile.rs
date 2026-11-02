@@ -61,17 +61,22 @@ pub fn reconcile(
     let unmatched_db: Vec<(String, DbEntry)> = db.into_iter().collect();
 
     // Step 2a: for each leftover fs, find db candidates (matching size+mtime).
-    let fs_candidates: Vec<Option<usize>> = leftover_fs.iter().map(|entry| {
-        let mut hits = unmatched_db.iter().enumerate()
-            .filter(|(_, (_, d))| d.size == entry.size && d.mtime == entry.mtime)
-            .map(|(i, _)| i);
-        let first = hits.next();
-        let second = hits.next();
-        match (first, second) {
-            (Some(i), None) => Some(i),
-            _ => None,  // 0 or >=2 candidates -> ambiguous, skip rebind
-        }
-    }).collect();
+    let fs_candidates: Vec<Option<usize>> = leftover_fs
+        .iter()
+        .map(|entry| {
+            let mut hits = unmatched_db
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, d))| d.size == entry.size && d.mtime == entry.mtime)
+                .map(|(i, _)| i);
+            let first = hits.next();
+            let second = hits.next();
+            match (first, second) {
+                (Some(i), None) => Some(i),
+                _ => None, // 0 or >=2 candidates -> ambiguous, skip rebind
+            }
+        })
+        .collect();
 
     // Step 2b: count how many fs entries claim each db entry.
     let mut db_claim_count: HashMap<usize, usize> = HashMap::new();
@@ -92,7 +97,8 @@ pub fn reconcile(
             if db_claim_count[j] == 1 {
                 let entry = leftover_fs[i].clone();
                 let (_old_rel, db_entry) = &unmatched_db[*j];
-                plan.rebound.push((db_entry.id, entry.relative_path.clone(), entry));
+                plan.rebound
+                    .push((db_entry.id, entry.relative_path.clone(), entry));
                 rebound_fs_idx.insert(i);
                 rebound_db_idx.insert(*j);
             }
@@ -115,11 +121,7 @@ pub fn reconcile(
     plan
 }
 
-pub fn apply_plan(
-    conn: &Connection,
-    workspace_id: i64,
-    plan: &ReconcilePlan,
-) -> Result<()> {
+pub fn apply_plan(conn: &Connection, workspace_id: i64, plan: &ReconcilePlan) -> Result<()> {
     conn.execute_batch("BEGIN")?;
     let result: Result<()> = (|| {
         // modified: refresh size/mtime; clear derived data (thumbnail, hash,
@@ -130,7 +132,7 @@ pub fn apply_plan(
                     SET file_size = ?1, created_at = ?2, updated_at = datetime('now'),
                         thumbnail_path = NULL, file_hash = NULL,
                         width = NULL, height = NULL
-                  WHERE id = ?3"
+                  WHERE id = ?3",
             )?;
             for (id, fs_entry) in &plan.modified {
                 stmt.execute(params![fs_entry.size, fs_entry.mtime, id])?;
@@ -141,7 +143,7 @@ pub fn apply_plan(
             let mut stmt = conn.prepare(
                 "UPDATE images
                     SET relative_path = ?1, file_name = ?2, updated_at = datetime('now')
-                  WHERE id = ?3"
+                  WHERE id = ?3",
             )?;
             for (id, new_rel, fs_entry) in &plan.rebound {
                 stmt.execute(params![new_rel, fs_entry.file_name, id])?;
@@ -164,7 +166,7 @@ pub fn apply_plan(
                     NULL,
                     ?6, ?7,
                     datetime('now'), datetime('now'), NULL
-                )"
+                )",
             )?;
             for fs_entry in &plan.added {
                 stmt.execute(params![
@@ -210,14 +212,19 @@ mod helpers {
     }
 
     pub fn entry(id: i64, size: i64, mtime: &str) -> DbEntry {
-        DbEntry { id, size, mtime: mtime.into(), thumbnail_path: None }
+        DbEntry {
+            id,
+            size,
+            mtime: mtime.into(),
+            thumbnail_path: None,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::helpers::{entry, fs};
     use super::*;
-    use super::helpers::{fs, entry};
 
     #[test]
     fn empty_inputs_yield_empty_plan() {
@@ -235,8 +242,12 @@ mod tests {
         let plan = reconcile(1, fs, HashMap::new());
         assert_eq!(plan.added.len(), 1);
         assert_eq!(plan.added[0].relative_path, "a/1.jpg");
-        assert!(plan.kept.is_empty() && plan.modified.is_empty()
-                && plan.rebound.is_empty() && plan.deleted.is_empty());
+        assert!(
+            plan.kept.is_empty()
+                && plan.modified.is_empty()
+                && plan.rebound.is_empty()
+                && plan.deleted.is_empty()
+        );
     }
 
     #[test]
@@ -256,8 +267,12 @@ mod tests {
         let fs = vec![fs("a/1.jpg", 100, "2026-01-01T00:00:00")];
         let plan = reconcile(1, fs, index);
         assert_eq!(plan.kept, vec![7]);
-        assert!(plan.modified.is_empty() && plan.added.is_empty()
-                && plan.rebound.is_empty() && plan.deleted.is_empty());
+        assert!(
+            plan.modified.is_empty()
+                && plan.added.is_empty()
+                && plan.rebound.is_empty()
+                && plan.deleted.is_empty()
+        );
     }
 
     #[test]
@@ -284,7 +299,10 @@ mod tests {
     #[test]
     fn renamed_file_with_size_mtime_match_is_rebound() {
         let mut index = HashMap::new();
-        index.insert("old/1.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
+        index.insert(
+            "old/1.jpg".to_string(),
+            entry(7, 100, "2026-01-01T00:00:00"),
+        );
         let fs = vec![fs("new/1.jpg", 100, "2026-01-01T00:00:00")];
         let plan = reconcile(1, fs, index);
         assert_eq!(plan.rebound.len(), 1);
@@ -333,22 +351,28 @@ mod tests {
     #[test]
     fn mixed_plan_covers_all_buckets() {
         let mut index = HashMap::new();
-        index.insert("kept.jpg".to_string(),     entry(7, 100, "2026-01-01T00:00:00"));
-        index.insert("modified.jpg".to_string(), entry(8, 100, "2026-01-01T00:00:00"));
-        index.insert("old_name.jpg".to_string(), entry(9, 200, "2026-02-01T00:00:00"));
+        index.insert("kept.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
+        index.insert(
+            "modified.jpg".to_string(),
+            entry(8, 100, "2026-01-01T00:00:00"),
+        );
+        index.insert(
+            "old_name.jpg".to_string(),
+            entry(9, 200, "2026-02-01T00:00:00"),
+        );
         let fs = vec![
-            fs("kept.jpg",          100, "2026-01-01T00:00:00"),
-            fs("modified.jpg",      150, "2026-01-02T00:00:00"),
-            fs("renamed.jpg",       200, "2026-02-01T00:00:00"),
-            fs("brand_new.jpg",     300, "2026-03-01T00:00:00"),
+            fs("kept.jpg", 100, "2026-01-01T00:00:00"),
+            fs("modified.jpg", 150, "2026-01-02T00:00:00"),
+            fs("renamed.jpg", 200, "2026-02-01T00:00:00"),
+            fs("brand_new.jpg", 300, "2026-03-01T00:00:00"),
         ];
         let plan = reconcile(1, fs, index);
-        assert_eq!(plan.kept,    vec![7]);
+        assert_eq!(plan.kept, vec![7]);
         assert_eq!(plan.modified.len(), 1);
         assert_eq!(plan.modified[0].0, 8);
         assert_eq!(plan.rebound.len(), 1);
         assert_eq!(plan.rebound[0].0, 9);
-        assert_eq!(plan.added.len(),  1);
+        assert_eq!(plan.added.len(), 1);
         assert_eq!(plan.added[0].relative_path, "brand_new.jpg");
         assert!(plan.deleted.is_empty());
     }
@@ -359,8 +383,14 @@ mod tests {
         // exercise both orderings of unmatched_db.
         for _ in 0..100 {
             let mut index = HashMap::new();
-            index.insert("old_a.jpg".to_string(), entry(1, 100, "2026-01-01T00:00:00"));
-            index.insert("old_b.jpg".to_string(), entry(2, 200, "2026-01-02T00:00:00"));
+            index.insert(
+                "old_a.jpg".to_string(),
+                entry(1, 100, "2026-01-01T00:00:00"),
+            );
+            index.insert(
+                "old_b.jpg".to_string(),
+                entry(2, 200, "2026-01-02T00:00:00"),
+            );
             let fs_list = vec![
                 fs("new_a.jpg", 100, "2026-01-01T00:00:00"),
                 fs("new_b.jpg", 200, "2026-01-02T00:00:00"),
@@ -368,13 +398,16 @@ mod tests {
             let plan = reconcile(1, fs_list, index);
             assert_eq!(plan.rebound.len(), 2);
             assert!(plan.deleted.is_empty());
-            let mut pairs: Vec<(i64, String)> = plan.rebound.iter()
-                .map(|(id, rel, _)| (*id, rel.clone())).collect();
+            let mut pairs: Vec<(i64, String)> = plan
+                .rebound
+                .iter()
+                .map(|(id, rel, _)| (*id, rel.clone()))
+                .collect();
             pairs.sort();
-            assert_eq!(pairs, vec![
-                (1, "new_a.jpg".to_string()),
-                (2, "new_b.jpg".to_string()),
-            ]);
+            assert_eq!(
+                pairs,
+                vec![(1, "new_a.jpg".to_string()), (2, "new_b.jpg".to_string()),]
+            );
         }
     }
 
@@ -396,8 +429,8 @@ mod tests {
 
 #[cfg(test)]
 mod apply_plan_tests {
+    use super::helpers::{entry, fs};
     use super::*;
-    use super::helpers::{fs, entry};
     use rusqlite::Connection;
     use tempfile::tempdir;
 
@@ -432,8 +465,9 @@ mod apply_plan_tests {
                 last_viewed_at TEXT,
                 UNIQUE(workspace_id, relative_path)
             );
-            INSERT INTO workspaces (name, path) VALUES ('test', '/tmp/test');"
-        ).unwrap();
+            INSERT INTO workspaces (name, path) VALUES ('test', '/tmp/test');",
+        )
+        .unwrap();
         conn
     }
 
@@ -445,19 +479,29 @@ mod apply_plan_tests {
              VALUES (1, 'a.jpg', 'a.jpg', 100, 4, 'my note', '2026-01-01T00:00:00')",
             [],
         ).unwrap();
-        let id: i64 = conn.query_row(
-            "SELECT id FROM images WHERE relative_path = 'a.jpg'", [], |r| r.get(0)
-        ).unwrap();
+        let id: i64 = conn
+            .query_row(
+                "SELECT id FROM images WHERE relative_path = 'a.jpg'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
 
         let mut index = HashMap::new();
         index.insert("a.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
-        let plan = ReconcilePlan { kept: vec![id], ..Default::default() };
+        let plan = ReconcilePlan {
+            kept: vec![id],
+            ..Default::default()
+        };
         apply_plan(&conn, 1, &plan).unwrap();
 
-        let row = conn.query_row(
-            "SELECT rating, notes FROM images WHERE id = ?1",
-            [id], |r| Ok((r.get::<_, i32>(0)?, r.get::<_, String>(1)?))
-        ).unwrap();
+        let row = conn
+            .query_row(
+                "SELECT rating, notes FROM images WHERE id = ?1",
+                [id],
+                |r| Ok((r.get::<_, i32>(0)?, r.get::<_, String>(1)?)),
+            )
+            .unwrap();
         assert_eq!(row.0, 4);
         assert_eq!(row.1, "my note");
     }
@@ -470,9 +514,13 @@ mod apply_plan_tests {
              VALUES (1, 'a.jpg', 'a.jpg', 100, 5, 'kept', '2026-01-01T00:00:00', '/thumbs/a.jpg', 'deadbeef', 800, 600)",
             [],
         ).unwrap();
-        let id: i64 = conn.query_row(
-            "SELECT id FROM images WHERE relative_path = 'a.jpg'", [], |r| r.get(0)
-        ).unwrap();
+        let id: i64 = conn
+            .query_row(
+                "SELECT id FROM images WHERE relative_path = 'a.jpg'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
 
         let mut index = HashMap::new();
         index.insert("a.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
@@ -497,7 +545,10 @@ mod apply_plan_tests {
         ).unwrap();
         assert_eq!(row.0, 200);
         assert_eq!(row.1, "2026-02-01T00:00:00");
-        assert_eq!(row.2, None, "thumbnail_path must be cleared so the batch regen picks it up");
+        assert_eq!(
+            row.2, None,
+            "thumbnail_path must be cleared so the batch regen picks it up"
+        );
         assert_eq!(row.3, 5, "rating preserved");
         assert_eq!(row.4, "kept", "notes preserved");
         assert_eq!(row.5, None, "stale hash cleared (content changed)");
@@ -541,14 +592,22 @@ mod apply_plan_tests {
              VALUES (1, 'old.jpg', 'old.jpg', 100, 3, 'precious', '2026-01-01T00:00:00', '/thumbs/old.jpg')",
             [],
         ).unwrap();
-        let id: i64 = conn.query_row(
-            "SELECT id FROM images WHERE relative_path = 'old.jpg'", [], |r| r.get(0)
-        ).unwrap();
+        let id: i64 = conn
+            .query_row(
+                "SELECT id FROM images WHERE relative_path = 'old.jpg'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
 
         let mut index = HashMap::new();
         index.insert("old.jpg".to_string(), entry(7, 100, "2026-01-01T00:00:00"));
         let plan = ReconcilePlan {
-            rebound: vec![(id, "new.jpg".into(), fs("new.jpg", 100, "2026-01-01T00:00:00"))],
+            rebound: vec![(
+                id,
+                "new.jpg".into(),
+                fs("new.jpg", 100, "2026-01-01T00:00:00"),
+            )],
             ..Default::default()
         };
         apply_plan(&conn, 1, &plan).unwrap();
@@ -567,7 +626,11 @@ mod apply_plan_tests {
         assert_eq!(row.1, "new.jpg");
         assert_eq!(row.2, 3, "rating preserved across rename");
         assert_eq!(row.3, "precious", "notes preserved across rename");
-        assert_eq!(row.4, Some("/thumbs/old.jpg".into()), "thumbnail_path preserved (keyed by id, not path)");
+        assert_eq!(
+            row.4,
+            Some("/thumbs/old.jpg".into()),
+            "thumbnail_path preserved (keyed by id, not path)"
+        );
     }
 
     #[test]
@@ -578,7 +641,9 @@ mod apply_plan_tests {
             ..Default::default()
         };
         apply_plan(&conn, 1, &plan).unwrap();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM images", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM images", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 1);
     }
 }

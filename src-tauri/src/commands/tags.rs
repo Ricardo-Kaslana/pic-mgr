@@ -1,6 +1,6 @@
-use tauri::State;
 use crate::models::{Tag, TagWithCount};
 use crate::AppState;
+use tauri::State;
 
 #[tauri::command]
 pub fn get_tags(state: State<AppState>, workspace_id: i64) -> Result<Vec<TagWithCount>, String> {
